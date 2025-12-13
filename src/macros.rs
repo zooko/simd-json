@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 /// Construct a `simd_json::Value` from a JSON literal.
 ///
 /// Taken from: <https://github.com/serde-rs/json/blob/5b5f95831d9e0d769367b30b76a686339bffd209/src/macros.rs>
@@ -1244,6 +1245,7 @@ macro_rules! static_cast_i64 {
         u64::cast_signed($v)
     };
 }
+pub(crate) use static_cast_i64;
 
 /// static cast to an u64
 macro_rules! static_cast_u64 {
