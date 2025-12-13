@@ -3,9 +3,35 @@ extern crate criterion;
 
 use core::time::Duration;
 
-#[cfg(feature = "jemallocator")]
+#[cfg(feature = "jemalloc")]
+use tikv_jemallocator::Jemalloc;
+#[cfg(feature = "jemalloc")]
 #[global_allocator]
-static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
+static ALLOC: Jemalloc = Jemalloc;
+
+#[cfg(feature = "mimalloc")]
+use mimalloc::MiMalloc;
+#[cfg(feature = "mimalloc")]
+#[global_allocator]
+static ALLOC: MiMalloc = MiMalloc;
+
+#[cfg(feature = "snmalloc")]
+use snmalloc_rs::SnMalloc;
+#[cfg(feature = "snmalloc")]
+#[global_allocator]
+static ALLOC: SnMalloc = SnMalloc;
+
+#[cfg(feature = "smalloc")]
+use smalloc::Smalloc;
+#[cfg(feature = "smalloc")]
+#[global_allocator]
+static ALLOC: Smalloc = Smalloc::new();
+
+#[cfg(feature = "smalloc")]
+#[ctor::ctor]
+unsafe fn init_smalloc() {
+    unsafe { ALLOC.init() };
+}
 
 #[cfg(feature = "bench-serde")]
 use serde_json;
