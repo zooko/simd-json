@@ -1194,7 +1194,7 @@ macro_rules! json_unexpected {
 /// possible compiler hint that a branch is unlikely
 #[cfg(feature = "hints")]
 macro_rules! unlikely {
-    ($e:expr) => {{ ::std::intrinsics::unlikely($e) }};
+    ($e:expr) => {{ ::std::hint::unlikely($e) }};
 }
 
 /// possible compiler hint that a branch is unlikely
@@ -1216,8 +1216,6 @@ macro_rules! unlikely {
         cond
     }};
 }
-
-pub(crate) use unlikely;
 
 /// static cast to an i32
 #[allow(unused_macros)]
@@ -1254,7 +1252,6 @@ macro_rules! static_cast_u64 {
         i64::cast_unsigned($v)
     };
 }
-pub(crate) use static_cast_u64;
 
 /// Custom `try!` macro that does no `From` conversions
 ///

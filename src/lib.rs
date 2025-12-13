@@ -1,3 +1,4 @@
+#![feature(likely_unlikely)]
 #![deny(warnings)]
 #![cfg_attr(feature = "hints", feature(core_intrinsics))]
 #![cfg_attr(feature = "portable", feature(portable_simd))]
@@ -44,7 +45,6 @@ mod numberparse;
 mod safer_unchecked;
 mod stringparse;
 
-use macros::static_cast_u64;
 use safer_unchecked::GetSaferUnchecked;
 use stage2::StackState;
 use tape::Value;
