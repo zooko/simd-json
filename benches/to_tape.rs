@@ -19,6 +19,12 @@ use snmalloc_rs::SnMalloc;
 #[global_allocator]
 static ALLOC: SnMalloc = SnMalloc;
 
+#[cfg(feature = "rpmalloc")]
+use rpmalloc::RpMalloc;
+#[cfg(feature = "rpmalloc")]
+#[global_allocator]
+static ALLOC: RpMalloc = RpMalloc;
+
 #[cfg(feature = "smalloc")]
 use smalloc::Smalloc;
 #[cfg(feature = "smalloc")]

@@ -32,7 +32,10 @@ getopts = { version = "0.2", optional = true }
 tikv-jemallocator = { version = "0.6", optional = true }
 mimalloc = { version = "*", features = ["v3"], optional = true }
 snmalloc-rs = { version = "0.3", optional = true }
-smalloc = { version = "7.1", git = "https://github.com/zooko/smalloc", optional = true }
+rpmalloc = { version = "0.2", optional = true }
+# smalloc = { version = "7.1", path = "../smalloc-7.1/smalloc", optional = true }
+# smalloc = { version = "7.2", path = "../smalloc-7.2/smalloc", optional = true }
+smalloc = { version = "7.3", path = "../smalloc-7.3/smalloc", optional = true }
 ctor = { version = "0.2", optional = true }
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
@@ -139,6 +142,7 @@ big-int-as-float = []
 jemalloc = ["dep:tikv-jemallocator"]
 mimalloc = ["dep:mimalloc"]
 snmalloc = ["dep:snmalloc-rs"]
+rpmalloc = ["dep:rpmalloc"]
 smalloc = ["dep:smalloc", "dep:ctor"]
 
 [[example]]
