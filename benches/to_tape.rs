@@ -31,12 +31,6 @@ use smalloc::Smalloc;
 #[global_allocator]
 static ALLOC: Smalloc = Smalloc::new();
 
-#[cfg(feature = "smalloc")]
-#[ctor::ctor]
-unsafe fn init_smalloc() {
-    unsafe { ALLOC.init() };
-}
-
 #[cfg(feature = "bench-serde")]
 use serde_json;
 
