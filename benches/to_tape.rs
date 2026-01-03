@@ -26,7 +26,7 @@ use rpmalloc::RpMalloc;
 static ALLOC: RpMalloc = RpMalloc;
 
 #[cfg(feature = "smalloc")]
-use smalloc::Smalloc;
+use smmalloc::Smalloc;
 #[cfg(feature = "smalloc")]
 #[global_allocator]
 static ALLOC: Smalloc = Smalloc::new();

@@ -33,8 +33,7 @@ tikv-jemallocator = { version = "0.6", optional = true }
 mimalloc = { version = "*", features = ["v3"], optional = true }
 snmalloc-rs = { version = "0.3", optional = true }
 rpmalloc = { version = "0.2", optional = true }
-smalloc = { version = "7.4", repo = "https://github.com/zooko/smalloc", optional = true }
-ctor = { version = "0.2", optional = true }
+smmalloc = { version = "7.4", repo = "https://github.com/zooko/smalloc", optional = true }
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 perfcnt = { version = "0.8", optional = true }
@@ -141,7 +140,7 @@ jemalloc = ["dep:tikv-jemallocator"]
 mimalloc = ["dep:mimalloc"]
 snmalloc = ["dep:snmalloc-rs"]
 rpmalloc = ["dep:rpmalloc"]
-smalloc = ["dep:smalloc", "dep:ctor"]
+smalloc = ["dep:smmalloc"]
 
 [[example]]
 name = "perf"
