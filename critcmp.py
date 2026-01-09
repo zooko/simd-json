@@ -42,7 +42,7 @@ def format_time(ns):
 def parse_file(filename):
     """Parse a criterion output file and return dict of test_name -> time_in_ns."""
     results = {}
-    with open(filename, 'r') as f:
+    with open(filename, 'r', encoding="utf-8") as f:
         content = f.read()
 
     pattern = r'(\S+)\s+time:\s+\[[\d.]+ \S+ ([\d.]+ \S+) [\d.]+ \S+\]'
