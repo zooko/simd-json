@@ -7,3 +7,4 @@ proptest-regressions
 .cargo
 .vscode
 rust-toolchain
+tmp
