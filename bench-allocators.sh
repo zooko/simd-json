@@ -28,6 +28,6 @@ echo OS type: 2>&1 | tee -a $RESF
 echo $OSTYPE 2>&1 | tee -a $RESF
 echo 2>&1 | tee -a $RESF
 
-cargo bench 2>&1 | tee default
-for AL in jemalloc mimalloc rpmalloc snmalloc smalloc; do BLNAME=${AL}; cargo bench --features=${AL} 2>&1 | tee ${BLNAME} ; done
+cargo --locked bench 2>&1 | tee default
+for AL in jemalloc mimalloc rpmalloc snmalloc smalloc; do BLNAME=${AL}; cargo --locked bench --features=${AL} 2>&1 | tee ${BLNAME} ; done
 ./critcmp.py default jemalloc mimalloc rpmalloc snmalloc smalloc 2>&1 | tee -a $RESF
