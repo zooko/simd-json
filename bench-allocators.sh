@@ -16,6 +16,10 @@ echo "# Saving result into a file named \"${RESF}\" ..."
 
 rm -f $RESF
 
+echo "# git log -1 | head -1" 2>&1 | tee -a $RESF
+git log -1 | head -1 2>&1 | tee -a $RESF
+echo 2>&1 | tee -a $RESF
+
 echo CPU type: 2>&1 | tee -a $RESF
 echo $CPUTYPE 2>&1 | tee -a $RESF
 echo 2>&1 | tee -a $RESF
