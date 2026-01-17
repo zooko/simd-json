@@ -15,29 +15,28 @@ ARGSSTR="${ARGS//[^[:alnum:]]/}"
 
 BNAME="simd-json"
 FNAME="${BNAME}.result.${CPUTYPE}.${OSTYPESTR}.${ARGSSTR}.txt"
-TMPF="tmp/${FNAME}"
-RESF="${FNAME}"
+RESF="tmp/${FNAME}"
 
-echo "# Saving result into a tmp file (in ./tmp) which will be moved to \"${RESF}\" when complete..."
+echo "# Saving result into \"${RESF}\""
 
-rm -f $TMPF
+rm -f $RESF
 mkdir -p tmp
 
-echo "# git log -1 | head -1" 2>&1 | tee -a $TMPF
-git log -1 | head -1 2>&1 | tee -a $TMPF
-echo 2>&1 | tee -a $TMPF
+echo "# git log -1 | head -1" 2>&1 | tee -a $RESF
+git log -1 | head -1 2>&1 | tee -a $RESF
+echo 2>&1 | tee -a $RESF
 
-echo "( [ -z \"\$(git status --porcelain)\" ] && echo \"Clean\" || echo \"Uncommitted changes\" )" 2>&1 | tee -a $TMPF
-( [ -z "$(git status --porcelain)" ] && echo "Clean" || echo "Uncommitted changes" ) 2>&1 | tee -a $TMPF
-echo 2>&1 | tee -a $TMPF
+echo "( [ -z \"\$(git status --porcelain)\" ] && echo \"Clean\" || echo \"Uncommitted changes\" )" 2>&1 | tee -a $RESF
+( [ -z "$(git status --porcelain)" ] && echo "Clean" || echo "Uncommitted changes" ) 2>&1 | tee -a $RESF
+echo 2>&1 | tee -a $RESF
 
-echo CPU type: 2>&1 | tee -a $TMPF
-echo $CPUTYPE 2>&1 | tee -a $TMPF
-echo 2>&1 | tee -a $TMPF
+echo CPU type: 2>&1 | tee -a $RESF
+echo $CPUTYPE 2>&1 | tee -a $RESF
+echo 2>&1 | tee -a $RESF
 
-echo OS type: 2>&1 | tee -a $TMPF
-echo $OSTYPE 2>&1 | tee -a $TMPF
-echo 2>&1 | tee -a $TMPF
+echo OS type: 2>&1 | tee -a $RESF
+echo $OSTYPE 2>&1 | tee -a $RESF
+echo 2>&1 | tee -a $RESF
 
 if [ "x${OSTYPE}" = "xmsys" ]; then
 	# no jemalloc on windows
@@ -46,10 +45,10 @@ else
 	ALLOCATORS="mimalloc rpmalloc jemalloc snmalloc smalloc"
 fi
 
+TMPALLOS="tmp/${ALLOCATORS// / tmp/}"
+
 cargo --locked bench 2>&1 | tee tmp/default
 for AL in ${ALLOCATORS} ; do BLNAME=${AL}; cargo --locked bench --features=${AL} 2>&1 | tee tmp/${BLNAME} ; done
-./critcmp.py tmp/default $(printf "tmp/" ${ALLOCATORS}) 2>&1 | tee -a $TMPF
-
-mv -f "${TMPF}" "${RESF}"
+./critcmp.py tmp/default $TMPALLOS 2>&1 | tee -a $RESF
 
 echo "# Results are in \"${RESF}\" ."
