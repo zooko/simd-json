@@ -46,9 +46,9 @@ else
 	ALLOCATORS="mimalloc rpmalloc jemalloc snmalloc smalloc"
 fi
 
-cargo --locked bench 2>&1 | tee default
-for AL in ${ALLOCATORS} ; do BLNAME=${AL}; cargo --locked bench --features=${AL} 2>&1 | tee ${BLNAME} ; done
-./critcmp.py default ${ALLOCATORS} 2>&1 | tee -a $TMPF
+cargo --locked bench 2>&1 | tee tmp/default
+for AL in ${ALLOCATORS} ; do BLNAME=${AL}; cargo --locked bench --features=${AL} 2>&1 | tee tmp/${BLNAME} ; done
+./critcmp.py tmp/default $(printf "tmp/" ${ALLOCATORS}) 2>&1 | tee -a $TMPF
 
 mv -f "${TMPF}" "${RESF}"
 

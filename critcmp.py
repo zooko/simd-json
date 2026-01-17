@@ -2,6 +2,7 @@
 
 # Thanks to Claude (Opus 4.5) for writing this to my specifications.
 
+import os
 import sys
 import re
 import argparse
@@ -71,7 +72,7 @@ if not all_tests:
     sys.exit(1)
 
 # Create column names from filenames
-col_names = [args.files[0]] + candidate_files
+col_names = [args.files[0]] + [ os.path.basename(c) for c in candidate_files ]
 
 # Calculate max test name length for formatting
 max_test_len = max(len(t) for t in all_tests)
