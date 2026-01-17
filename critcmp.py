@@ -2,14 +2,17 @@
 
 # Thanks to Claude (Opus 4.5) for writing this to my specifications.
 
-import os
 import sys
 import re
 import argparse
+import os
 
 parser = argparse.ArgumentParser()
 parser.add_argument('files', nargs='+', help='Baseline file followed by candidate files')
 args = parser.parse_args()
+
+# Hardcoded allocator ordering (excluding 'default' which is always first and 'smalloc' which is always last)
+ALLOCATOR_ORDER = ['jemalloc', 'snmalloc', 'mimalloc', 'rpmalloc']
 
 def parse_time(time_str):
     """Parse a time string like '72.624 µs' or '151.08 ms' and return nanoseconds."""
@@ -54,9 +57,33 @@ def parse_file(filename):
 
     return results
 
-# Parse all files
-baseline_file = args.files[0]
-candidate_files = args.files[1:]
+def get_allocator_name(filepath):
+    """Extract allocator name from filepath using os.path functions."""
+    basename = os.path.basename(filepath)
+    filename_without_ext = os.path.splitext(basename)[0]
+    return filename_without_ext
+
+def sort_allocator_files(files):
+    """Sort files: default first, then ALLOCATOR_ORDER, then unknown, then smalloc last."""
+    def sort_key(filepath):
+        name = get_allocator_name(filepath)
+
+        if name == 'default':
+            return (0, 0, name)
+        elif name == 'smalloc':
+            return (3, 0, name)
+        elif name in ALLOCATOR_ORDER:
+            return (1, ALLOCATOR_ORDER.index(name), name)
+        else:
+            # Unknown allocators go between known and smalloc
+            return (2, 0, name)
+
+    return sorted(files, key=sort_key)
+
+# Sort files in desired order
+sorted_files = sort_allocator_files(args.files)
+baseline_file = sorted_files[0]
+candidate_files = sorted_files[1:]
 
 baseline_results = parse_file(baseline_file)
 candidate_results = [parse_file(f) for f in candidate_files]
@@ -72,7 +99,7 @@ if not all_tests:
     sys.exit(1)
 
 # Create column names from filenames
-col_names = [args.files[0]] + [ os.path.basename(c) for c in candidate_files ]
+col_names = [get_allocator_name(baseline_file)] + [get_allocator_name(f) for f in candidate_files]
 
 # Calculate max test name length for formatting
 max_test_len = max(len(t) for t in all_tests)
