@@ -48,4 +48,8 @@ fi
 
 cargo --locked bench 2>&1 | tee default
 for AL in ${ALLOCATORS} ; do BLNAME=${AL}; cargo --locked bench --features=${AL} 2>&1 | tee ${BLNAME} ; done
-./critcmp.py default ${ALLOCATORS} 2>&1 | tee -a $RESF
+./critcmp.py default ${ALLOCATORS} 2>&1 | tee -a $TMPF
+
+mv -f "${TMPF}" "${RESF}"
+
+echo "# Results are in \"${RESF}\" ."
