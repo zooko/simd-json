@@ -39,8 +39,8 @@ echo $OSTYPE 2>&1 | tee -a $RESF
 echo 2>&1 | tee -a $RESF
 
 if [ "x${OSTYPE}" = "xmsys" ]; then
-	# no jemalloc on windows
-	ALLOCATORS="mimalloc rpmalloc snmalloc smalloc"
+	# no jemalloc or snmalloc on windows
+	ALLOCATORS="mimalloc rpmalloc smalloc"
 else
 	ALLOCATORS="mimalloc rpmalloc jemalloc snmalloc smalloc"
 fi
