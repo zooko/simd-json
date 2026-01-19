@@ -82,123 +82,103 @@ def sort_allocator_files(files):
         else:
             # Unknown allocators go between known and smalloc
             return (2, 0, name)
+
     return sorted(files, key=sort_key)
 
-def generate_svg_graph(col_names, normalized_sums, metadata, output_file):
-    """Generate an SVG bar chart of normalized performance."""
+def generate_svg_graph(allocators, normalized_sums, metadata, output_file):
+    """Generate an SVG bar chart comparing allocator performance."""
 
-    # SVG dimensions
+    # Graph dimensions
     width = 800
     height = 500
-    margin_top = 120  # Extra space for metadata
-    margin_right = 50
-    margin_bottom = 80
-    margin_left = 80
+    margin_top = 60
+    margin_bottom = 120  # Increased for metadata below
+    margin_left = 120
+    margin_right = 40
 
     chart_width = width - margin_left - margin_right
     chart_height = height - margin_top - margin_bottom
 
-    # Data
-    n = len(col_names)
-    baseline_total = normalized_sums[0]
-    percentages = [(s / baseline_total * 100) for s in normalized_sums]
+    # Find max value for scaling
+    max_val = max(normalized_sums)
 
-    # Find max for scaling
-    max_val = max(percentages)
-    scale = chart_height / (max_val * 1.1)  # 10% headroom
+    # Calculate bar properties
+    bar_width = chart_width / len(allocators)
+    padding = bar_width * 0.2
+    actual_bar_width = bar_width - padding
 
-    # Bar width
-    bar_width = (chart_width / n) * 0.7
-    bar_spacing = chart_width / n
+    # Color scheme
+    colors = ['#4285f4', '#ea4335', '#fbbc04', '#34a853', '#9333ea', '#ff6b9d', '#00bcd4']
 
-    # Colors
-    colors = {
-        'default': '#95a5a6',
-        'jemalloc': '#3498db',
-        'snmalloc': '#2ecc71',
-        'mimalloc': '#e74c3c',
-        'rpmalloc': '#f39c12',
-        'smalloc': '#9b59b6'
-    }
-
-    svg = []
-    svg.append('<?xml version="1.0" encoding="UTF-8"?>')
-    svg.append(f'<svg width="{width}" height="{height}" xmlns="http://www.w3.org/2000/svg">')
-
-    # Style
-    svg.append('<defs><style>')
-    svg.append('text { font-family: monospace, sans-serif; }')
-    svg.append('.title { font-size: 16px; font-weight: bold; }')
-    svg.append('.metadata { font-size: 11px; fill: #666; }')
-    svg.append('.label { font-size: 12px; text-anchor: middle; }')
-    svg.append('.value { font-size: 11px; text-anchor: middle; font-weight: bold; }')
-    svg.append('.axis-label { font-size: 12px; }')
-    svg.append('</style></defs>')
-
-    # Background
-    svg.append(f'<rect width="{width}" height="{height}" fill="white"/>')
+    svg_parts = []
+    svg_parts.append(f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}">
+  <style>
+    .bar {{ stroke: none; }}
+    .axis {{ stroke: #333; stroke-width: 1; }}
+    .grid {{ stroke: #ddd; stroke-width: 0.5; }}
+    .label {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; font-size: 12px; fill: #333; }}
+    .value {{ font-family: monospace; font-size: 11px; fill: #999; }}
+    .title {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; font-size: 16px; font-weight: 600; fill: #333; }}
+    .metadata {{ font-family: monospace; font-size: 10px; fill: #666; }}
+  </style>
+''')
 
     # Title
-    svg.append(f'<text x="{width/2}" y="20" class="title" text-anchor="middle">Time (lower is better)</text>')
+    svg_parts.append(f'  <text x="{width/2}" y="30" class="title" text-anchor="middle">Time (lower is better)</text>\n')
 
-    # Metadata
-    y_meta = 40
-    if metadata.get('commit'):
-        commit_short = metadata['commit'][:12] if len(metadata['commit']) > 12 else metadata['commit']
-        svg.append(f'<text x="10" y="{y_meta}" class="metadata">Commit: {commit_short}</text>')
-        y_meta += 14
-    if metadata.get('git_status'):
-        svg.append(f'<text x="10" y="{y_meta}" class="metadata">Status: {metadata["git_status"]}</text>')
-        y_meta += 14
-    if metadata.get('cpu'):
-        svg.append(f'<text x="10" y="{y_meta}" class="metadata">CPU: {metadata["cpu"]}</text>')
-        y_meta += 14
-    if metadata.get('os'):
-        svg.append(f'<text x="10" y="{y_meta}" class="metadata">OS: {metadata["os"]}</text>')
+    # Y-axis and grid lines
+    svg_parts.append(f'  <line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{margin_top + chart_height}" class="axis"/>\n')
+    svg_parts.append(f'  <line x1="{margin_left}" y1="{margin_top + chart_height}" x2="{margin_left + chart_width}" y2="{margin_top + chart_height}" class="axis"/>\n')
 
-    # Chart area
-    chart_y = margin_top
+    # Grid lines and labels (every 20%)
+    baseline = normalized_sums[0]
+    for pct in [0, 20, 40, 60, 80, 100]:
+        y = margin_top + chart_height * (1 - pct/100)
+        val = baseline * pct / 100
+        svg_parts.append(f'  <line x1="{margin_left}" y1="{y}" x2="{margin_left + chart_width}" y2="{y}" class="grid"/>\n')
+        svg_parts.append(f'  <text x="{margin_left - 10}" y="{y + 4}" class="label" text-anchor="end">{val:.0f}s ({pct}%)</text>\n')
 
-    # Draw horizontal grid lines
-    for i in range(0, 6):
-        grid_val = (max_val * 1.1) * i / 5
-        y = chart_y + chart_height - (grid_val * scale)
-        svg.append(f'<line x1="{margin_left}" y1="{y}" x2="{margin_left + chart_width}" y2="{y}" stroke="#ddd" stroke-width="1"/>')
-        svg.append(f'<text x="{margin_left - 5}" y="{y + 4}" class="axis-label" text-anchor="end">{grid_val:.0f}%</text>')
+    # Bars and labels
+    for i, (name, norm_sum) in enumerate(zip(allocators, normalized_sums)):
+        x = margin_left + i * bar_width + padding/2
+        bar_height = (norm_sum / max_val) * chart_height
+        y = margin_top + chart_height - bar_height
 
-    # Draw bars
-    for i, (name, pct, norm_time) in enumerate(zip(col_names, percentages, normalized_sums)):
-        x = margin_left + i * bar_spacing + (bar_spacing - bar_width) / 2
-        bar_height = pct * scale
-        y = chart_y + chart_height - bar_height
-
-        color = colors.get(name, '#34495e')
+        color = colors[i % len(colors)]
 
         # Bar
-        svg.append(f'<rect x="{x}" y="{y}" width="{bar_width}" height="{bar_height}" fill="{color}" opacity="0.8"/>')
+        svg_parts.append(f'  <rect x="{x}" y="{y}" width="{actual_bar_width}" height="{bar_height}" class="bar" fill="{color}"/>\n')
 
-        # Value on top of bar
-        svg.append(f'<text x="{x + bar_width/2}" y="{y - 5}" class="value" fill="{color}">{pct:.1f}%</text>')
+        # Value above bar (rounded to whole percentage)
+        pct = round((norm_sum - baseline) / baseline * 100)
+        pct_str = f"{pct:+d}%" if i > 0 else "baseline"
+        svg_parts.append(f'  <text x="{x + actual_bar_width/2}" y="{y - 5}" class="value" text-anchor="middle">{norm_sum:.1f}s ({pct_str})</text>\n')
 
-        # Time below
-        time_str = f"{norm_time:.1f}s"
-        svg.append(f'<text x="{x + bar_width/2}" y="{y - 20}" class="value" fill="#666" font-size="10">{time_str}</text>')
+        # Allocator name below
+        text_y = margin_top + chart_height + 20
+        svg_parts.append(f'  <text x="{x + actual_bar_width/2}" y="{text_y}" class="label" text-anchor="middle">{name}</text>\n')
 
-        # Label (rotated if needed)
-        label_y = chart_y + chart_height + 15
-        if len(name) > 8:
-            # Rotate long names
-            svg.append(f'<text x="{x + bar_width/2}" y="{label_y}" class="label" transform="rotate(45 {x + bar_width/2} {label_y})">{name}</text>')
-        else:
-            svg.append(f'<text x="{x + bar_width/2}" y="{label_y}" class="label">{name}</text>')
+    # Metadata below the graph
+    metadata_y = margin_top + chart_height + 50
+    metadata_lines = []
 
-    # Y-axis label
-    svg.append(f'<text x="15" y="{chart_y + chart_height/2}" class="title" transform="rotate(-90 15 {chart_y + chart_height/2})" text-anchor="middle" font-size="14">% of Baseline Time</text>')
+    if metadata.get('commit'):
+        metadata_lines.append(f"Commit: {metadata['commit'][:12]}")
+    if metadata.get('git_status'):
+        metadata_lines.append(f"Git status: {metadata['git_status']}")
+    if metadata.get('cpu'):
+        metadata_lines.append(f"CPU: {metadata['cpu']}")
+    if metadata.get('os'):
+        metadata_lines.append(f"OS: {metadata['os']}")
 
-    svg.append('</svg>')
+    for i, line in enumerate(metadata_lines):
+        y = metadata_y + i * 15
+        svg_parts.append(f'  <text x="{width/2}" y="{y}" class="metadata" text-anchor="middle">{line}</text>\n')
+
+    svg_parts.append('</svg>')
 
     with open(output_file, 'w') as f:
-        f.write('\n'.join(svg))
+        f.write(''.join(svg_parts))
 
     print(f"\n📊 Graph saved to: {output_file}")
 
