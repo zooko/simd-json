@@ -129,7 +129,7 @@ def generate_svg_graph(allocators, normalized_sums, metadata, output_file):
 ''')
 
     # Title
-    svg_parts.append(f'  <text x="{width/2}" y="30" class="title" text-anchor="middle">Time (lower is better)</text>\n')
+    svg_parts.append(f'  <text x="{width/2}" y="30" class="title" text-anchor="middle">Performance of simd-json with different allocators—time (lower is better)</text>\n')
 
     # Y-axis
     svg_parts.append(f'  <line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{margin_top + chart_height}" class="axis"/>\n')
@@ -171,6 +171,7 @@ def generate_svg_graph(allocators, normalized_sums, metadata, output_file):
     metadata_y = margin_top + chart_height + 50
     metadata_lines = []
 
+    metadata_lines.append("Source: https://github.com/zooko/simd-json")
     if metadata.get('commit'):
         metadata_lines.append(f"Commit: {metadata['commit'][:12]}")
     if metadata.get('git_status'):
