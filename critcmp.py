@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Thanks to Claude (Opus 4.5) for writing this to my specifications.
+# Thanks to Claude (Opus 4.5 & Sonnet 4.5) for writing this to my specifications.
 
 import sys
 import re
@@ -92,15 +92,20 @@ def generate_svg_graph(allocators, normalized_sums, metadata, output_file):
     width = 800
     height = 500
     margin_top = 60
-    margin_bottom = 120  # Increased for metadata below
-    margin_left = 120
+    margin_bottom = 120  # Space for metadata below
+    margin_left = 80
     margin_right = 40
 
     chart_width = width - margin_left - margin_right
     chart_height = height - margin_top - margin_bottom
 
-    # Find max value for scaling
-    max_val = max(normalized_sums)
+    # Calculate percentages (baseline = 100%, others relative to baseline)
+    baseline = normalized_sums[0]
+    percentages = [(s / baseline * 100) for s in normalized_sums]
+
+    # Find max for scaling
+    max_pct = max(percentages)
+    scale_max = max_pct * 1.1  # 10% padding at top
 
     # Calculate bar properties
     bar_width = chart_width / len(allocators)
@@ -126,22 +131,22 @@ def generate_svg_graph(allocators, normalized_sums, metadata, output_file):
     # Title
     svg_parts.append(f'  <text x="{width/2}" y="30" class="title" text-anchor="middle">Time (lower is better)</text>\n')
 
-    # Y-axis and grid lines
+    # Y-axis
     svg_parts.append(f'  <line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{margin_top + chart_height}" class="axis"/>\n')
     svg_parts.append(f'  <line x1="{margin_left}" y1="{margin_top + chart_height}" x2="{margin_left + chart_width}" y2="{margin_top + chart_height}" class="axis"/>\n')
 
-    # Grid lines and labels (every 20%)
-    baseline = normalized_sums[0]
-    for pct in [0, 20, 40, 60, 80, 100]:
-        y = margin_top + chart_height * (1 - pct/100)
-        val = baseline * pct / 100
+    # Grid lines and labels (every 20% from 0% to 120%)
+    for pct in [0, 20, 40, 60, 80, 100, 120]:
+        if pct > scale_max:
+            break
+        y = margin_top + chart_height * (1 - pct/scale_max)
         svg_parts.append(f'  <line x1="{margin_left}" y1="{y}" x2="{margin_left + chart_width}" y2="{y}" class="grid"/>\n')
-        svg_parts.append(f'  <text x="{margin_left - 10}" y="{y + 4}" class="label" text-anchor="end">{val:.0f}s ({pct}%)</text>\n')
+        svg_parts.append(f'  <text x="{margin_left - 10}" y="{y + 4}" class="label" text-anchor="end">{pct:.0f}%</text>\n')
 
     # Bars and labels
-    for i, (name, norm_sum) in enumerate(zip(allocators, normalized_sums)):
+    for i, (name, pct) in enumerate(zip(allocators, percentages)):
         x = margin_left + i * bar_width + padding/2
-        bar_height = (norm_sum / max_val) * chart_height
+        bar_height = (pct / scale_max) * chart_height
         y = margin_top + chart_height - bar_height
 
         color = colors[i % len(colors)]
@@ -149,10 +154,14 @@ def generate_svg_graph(allocators, normalized_sums, metadata, output_file):
         # Bar
         svg_parts.append(f'  <rect x="{x}" y="{y}" width="{actual_bar_width}" height="{bar_height}" class="bar" fill="{color}"/>\n')
 
-        # Value above bar (rounded to whole percentage)
-        pct = round((norm_sum - baseline) / baseline * 100)
-        pct_str = f"{pct:+d}%" if i > 0 else "baseline"
-        svg_parts.append(f'  <text x="{x + actual_bar_width/2}" y="{y - 5}" class="value" text-anchor="middle">{norm_sum:.1f}s ({pct_str})</text>\n')
+        # Value above bar (delta percentage rounded to whole number)
+        if i == 0:
+            label = "100% (baseline)"
+        else:
+            delta = round(pct - 100)
+            label = f"{pct:.0f}%"
+
+        svg_parts.append(f'  <text x="{x + actual_bar_width/2}" y="{y - 5}" class="value" text-anchor="middle">{label}</text>\n')
 
         # Allocator name below
         text_y = margin_top + chart_height + 20
