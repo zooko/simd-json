@@ -224,7 +224,7 @@ for name in col_names:
 print(header)
 print("-" * len(header))
 
-# Track normalized times (time to do 100 seconds worth of baseline work)
+# Track normalized times (time to do 1 seconds worth of baseline work per test)
 normalized_sums = [0.0] * len(col_names)
 
 # Print each row
@@ -236,7 +236,7 @@ for test in all_tests:
     time_str = format_time(baseline_time)
     cell = f"{time_str} (  0.0%)"
     row += f"  {cell:>{col_width}}"
-    normalized_sums[0] += 100.0
+    normalized_sums[0] += 1.0
 
     # Candidate columns
     for i, cand in enumerate(candidate_results):
@@ -245,13 +245,13 @@ for test in all_tests:
         time_str = format_time(cand_time)
         cell = f"{time_str} ({relative:>+5.1f}%)"
         row += f"  {cell:>{col_width}}"
-        normalized_sums[i + 1] += 100.0 * (cand_time / baseline_time)
+        normalized_sums[i + 1] += 1.0 * (cand_time / baseline_time)
 
     print(row)
 
 # Print normalized sums
 print("-" * len(header))
-sum_row = f"{'NORMALIZED (100s baseline work)':<{max_test_len}}"
+sum_row = f"{'NORMALIZED (1s of baseline work per test)':<{max_test_len}}"
 for s in normalized_sums:
     cell = f"{s:>8.1f} s  (      )"
     sum_row += f"  {cell:>{col_width}}"
@@ -267,12 +267,12 @@ for s in normalized_sums:
 print(rel_row)
 
 # Print compact summary
-print("\n" + "=" * 60)
+print("\n" + "=" * 52)
 print("COMPACT SUMMARY")
-print("=" * 60)
+print("=" * 52)
 print()
-print(f"{'Allocator':<12}  {'Normalized':>12}  {'Per Test':>12}  {'vs Baseline':>12}")
-print("-" * 60)
+print(f"{'Allocator':<12}  {'Total Time (1s per test)':>24}  {'vs Baseline':>12}")
+print("-" * 52)
 
 num_tests = len(all_tests)
 for i, (name, norm_sum) in enumerate(zip(col_names, normalized_sums)):
@@ -283,7 +283,7 @@ for i, (name, norm_sum) in enumerate(zip(col_names, normalized_sums)):
         pct = (norm_sum - baseline_total) / baseline_total * 100
         vs_baseline = f"{pct:+.1f}%"
 
-    print(f"{name:<12}  {norm_sum:>10.1f} s  {per_test:>10.1f} s  {vs_baseline:>12}")
+    print(f"{name:<12}  {norm_sum:>22.1f} s  {vs_baseline:>12}")
 
 # Generate graph if requested
 if args.graph:
