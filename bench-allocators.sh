@@ -3,8 +3,8 @@
 BNAME="simd-json"
 
 # Collect metadata
-GITCOMMIT=$(git log -1 | head -1 | cut -d' ' -f2)
-GITCLEANSTATUS=$([ -z \"$(git status --porcelain)\" ] && echo "Clean" || echo "Uncommitted changes")
+GITCOMMIT="$(git log -1 | head -1 | cut -d' ' -f2)"
+GITCLEANSTATUS=$( [ -z "$( git status --porcelain )" ] && echo \"Clean\" || echo \"Uncommitted changes\" )
 TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 # CPU type on linuxy
 CPUTYPE=`grep "model name" /proc/cpuinfo 2>/dev/null | uniq | cut -d':' -f2-`
@@ -29,7 +29,7 @@ if [ "x${OSTYPE}" = "xmsys" ]; then
     # no jemalloc or snmalloc on windows
     ALLOCATORS="mimalloc rpmalloc smalloc"
 else
-    ALLOCATORS="mimalloc rpmalloc jemalloc snmalloc smalloc"
+    ALLOCATORS="jemalloc snmalloc mimalloc rpmalloc smalloc"
 fi
 
 TMPALLOS="tmp/${ALLOCATORS// / tmp/}"
