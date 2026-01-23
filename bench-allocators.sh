@@ -6,6 +6,7 @@ BNAME="simd-json"
 GITCOMMIT="$(git log -1 | head -1 | cut -d' ' -f2)"
 GITCLEANSTATUS=$( [ -z "$( git status --porcelain )" ] && echo \"Clean\" || echo \"Uncommitted changes\" )
 TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+
 # CPU type on linuxy
 CPUTYPE=`grep "model name" /proc/cpuinfo 2>/dev/null | uniq | cut -d':' -f2-`
 if [ "x${CPUTYPE}" = "x" ] ; then
@@ -15,11 +16,13 @@ fi
 CPUTYPESTR="${CPUTYPE//[^[:alnum:]]/}"
 OSTYPESTR="${OSTYPE//[^[:alnum:]]/}"
 ARGS=$*
-ARGSSTR="${ARGS//[^[:alnum:]]/}"
 CPUSTR_DOT_OSSTR="${CPUTYPESTR}.${OSTYPESTR}"
-FNAME="${BNAME}.result.${CPUSTR_DOT_OSSTR}.txt"
-RESF="tmp/${FNAME}"
-GRAPHF="tmp/${BNAME}.graph.${CPUSTR_DOT_OSSTR}.svg"
+OUTPUT_DIR="${OUTPUT_DIR:-./benchmark-results}/${CPUSTR_DOT_OSSTR}"
+
+RESF="${OUTPUT_DIR}/${BNAME}.result.txt"
+GRAPHF="${OUTPUT_DIR}/${BNAME}.graph.svg"
+
+mkdir -p ${OUTPUT_DIR}
 
 echo "# Saving result into \"${RESF}\""
 echo "# Saving graph into \"${GRAPHF}\""
