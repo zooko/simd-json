@@ -1,4 +1,3 @@
-#![feature(likely_unlikely)]
 #![deny(warnings)]
 #![cfg_attr(feature = "hints", feature(core_intrinsics))]
 #![cfg_attr(feature = "portable", feature(portable_simd))]
