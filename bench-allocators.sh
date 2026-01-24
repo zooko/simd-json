@@ -4,6 +4,7 @@ set -e
 BNAME="simd-json"
 
 # Collect metadata
+GITSOURCE=$(git remote get-url origin)
 GITCOMMIT=$(git rev-parse HEAD)
 GITCLEANSTATUS=$( [ -z "$( git status --porcelain )" ] && echo \"Clean\" || echo \"Uncommitted changes\" )
 TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
@@ -60,6 +61,7 @@ done
 
 # Generate comparison with metadata passed as arguments
 ./critcmp.py tmp/default $TMPALLOS \
+    --source "$GITSOURCE" \
     --commit "$GITCOMMIT" \
     --git-status "$GITCLEANSTATUS" \
     --cpu "$CPUTYPE" \
@@ -68,4 +70,3 @@ done
     2>&1 | tee -a $RESF
 
 echo "# Results are in \"${RESF}\" ."
-echo "# Graph is in \"${GRAPHF}\" ."
