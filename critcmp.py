@@ -4,114 +4,74 @@
 import sys
 import re
 import argparse
-import os
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-import numpy as np
+import matplotlib.font_manager as fm
+from collections import defaultdict
 
-parser = argparse.ArgumentParser()
-parser.add_argument('files', nargs='+', help='Baseline file followed by candidate files')
-parser.add_argument('--commit', help='Git commit hash')
-parser.add_argument('--git-status', help='Git status (Clean or Uncommitted changes)')
-parser.add_argument('--cpu', help='CPU type')
-parser.add_argument('--os', help='OS type')
-parser.add_argument('--source', help='Source URL')
-parser.add_argument('--graph', help='Output SVG graph to this file')
-args = parser.parse_args()
-
-# Allocator colors (matching smalloc benchmark colors)
+# Allocator colors
 ALLOCATOR_COLORS = {
-    'default': '#ab47bc',    # purple
+    'default': '#78909c',   # blue-grey (distinct from smalloc green)
     'glibc': '#5c6bc0',      # indigo
-    'jemalloc': '#42a5f5',   # blue
-    'snmalloc': '#26a69a',   # teal
+    'jemalloc': '#66bb6a',    # green
+    'snmalloc': '#ab47bc',    # purple
     'mimalloc': '#ffca28',   # amber
     'rpmalloc': '#ff7043',   # deep orange
-    'smalloc': '#66bb6a',    # green
+    'smalloc': '#42a5f5',   # blue
 }
 UNKNOWN_ALLOCATOR_COLOR = '#9e9e9e'  # gray
 
-# Allocator ordering
+# Canonical allocator ordering: default first, then these in order, then unknown, then smalloc last
 ALLOCATOR_ORDER = ['default', 'jemalloc', 'snmalloc', 'mimalloc', 'rpmalloc', 'smalloc']
 
 def get_color(name):
     return ALLOCATOR_COLORS.get(name, UNKNOWN_ALLOCATOR_COLOR)
 
-def parse_time(time_str):
-    """Parse a time string like '72.624 µs' or '151.08 ms' and return nanoseconds."""
-    match = re.match(r'([\d.]+)\s*(\S+)', time_str)
-    if not match:
-        raise ValueError(f"Cannot parse time: {time_str}")
-
-    value = float(match.group(1))
-    unit = match.group(2)
-
-    multipliers = {
-        'ns': 1,
-        'µs': 1_000,
-        'us': 1_000,
-        'ms': 1_000_000,
-        's': 1_000_000_000,
-    }
-
-    if unit not in multipliers:
-        raise ValueError(f"Unknown time unit: {unit}")
-
-    return value * multipliers[unit]
-
-def format_time(ns):
-    """Format nanoseconds back to a human-readable string with fixed width."""
-    if ns >= 1_000_000_000:
-        return f"{ns / 1_000_000_000:>8.2f} s "
-    elif ns >= 1_000_000:
-        return f"{ns / 1_000_000:>8.2f} ms"
-    elif ns >= 1_000:
-        return f"{ns / 1_000:>8.2f} µs"
-    else:
-        return f"{ns:>8.2f} ns"
-
-def parse_file(filename):
-    """Parse a criterion output file and return dict of test_name -> time_in_ns."""
-    results = {}
-
-    with open(filename, 'r', encoding="utf-8") as f:
-        content = f.read()
-
-    pattern = r'(\S+)\s+time:\s+\[[\d.]+ \S+ ([\d.]+ \S+) [\d.]+ \S+\]'
-    for match in re.finditer(pattern, content):
-        test_name = match.group(1)
-        median_time = match.group(2)
-        results[test_name] = parse_time(median_time)
-
-    return results
-
-def get_allocator_name(filepath):
-    """Extract allocator name from filepath using os.path functions."""
-    basename = os.path.basename(filepath)
-    filename_without_ext = os.path.splitext(basename)[0]
-    return filename_without_ext
-
-def sort_allocators(allocators):
-    """Sort allocators in canonical order."""
+def sort_allocators(names):
+    """Sort allocator names in canonical order: default, known allocators, unknown, smalloc last."""
     def sort_key(name):
         if name in ALLOCATOR_ORDER:
             return (0, ALLOCATOR_ORDER.index(name))
-        return (1, name)
-    return sorted(allocators, key=sort_key)
-
-def sort_allocator_files(files):
-    """Sort files: default first, then ALLOCATOR_ORDER, then unknown, then smalloc last."""
-    def sort_key(filepath):
-        name = get_allocator_name(filepath)
-        if name == 'default':
-            return (0, 0, name)
-        elif name == 'smalloc':
-            return (3, 0, name)
-        elif name in ALLOCATOR_ORDER:
-            return (1, ALLOCATOR_ORDER.index(name), name)
         else:
-            return (2, 0, name)
-    return sorted(files, key=sort_key)
+            # Unknown allocators go between rpmalloc and smalloc
+            return (0, ALLOCATOR_ORDER.index('smalloc') - 0.5)
+    return sorted(names, key=sort_key)
+
+def parse_file(filename):
+    """Parse a Criterion benchmark output file and return {test_name: median_ns}."""
+    results = {}
+    with open(filename, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    # Match lines like: "test_name  time:   [1.2345 µs 1.2456 µs 1.2567 µs]"
+    pattern = r'^(\S+)\s+time:\s+\[[\d.]+ [µnms]+\s+([\d.]+)\s+([µnms]+)'
+    for match in re.finditer(pattern, content, re.MULTILINE):
+        test_name = match.group(1)
+        median_value = float(match.group(2))
+        unit = match.group(3)
+
+        # Convert to nanoseconds
+        multipliers = {'ns': 1, 'µs': 1000, 'ms': 1_000_000, 's': 1_000_000_000}
+        median_ns = median_value * multipliers.get(unit, 1)
+        results[test_name] = median_ns
+
+    return results
+
+def format_time(ns):
+    """Format nanoseconds as human-readable string."""
+    if ns >= 1_000_000:
+        return f"{ns/1_000_000:.0f}ms"
+    elif ns >= 1_000:
+        return f"{ns/1_000:.0f}μs"
+    else:
+        return f"{ns:.0f}ns"
+
+def get_allocator_name(filename):
+    """Extract allocator name from filename."""
+    basename = filename.rsplit('/', 1)[-1]  # Get just the filename
+    name = basename.replace('.txt', '').replace('.bench', '').replace('criterion-', '')
+    return name
 
 def format_pct_diff(ratio):
     """Format percentage difference from baseline."""
@@ -123,193 +83,218 @@ def format_pct_diff(ratio):
     else:
         return f"{int(round(pct_diff))}%"
 
-def generate_graph(allocators, normalized_sums, metadata, output_file):
-    """Generate a bar chart comparing allocator performance."""
+def generate_graph(allocators, normalized_sums, absolute_times, metadata, output_file, title_suffix=''):
+    """Generate bar chart comparing allocator performance using matplotlib."""
 
-    # Calculate ratios (relative to baseline)
+    # Try to use Arial/Helvetica for a cleaner look
+    try:
+        available_fonts = [f.name for f in fm.fontManager.ttflist]
+        if 'Arial' in available_fonts:
+            plt.rcParams['font.family'] = 'Arial'
+        elif 'Helvetica' in available_fonts:
+            plt.rcParams['font.family'] = 'Helvetica'
+        else:
+            plt.rcParams['font.family'] = 'sans-serif'
+            plt.rcParams['font.sans-serif'] = ['Arial', 'Helvetica', 'DejaVu Sans']
+    except:
+        plt.rcParams['font.family'] = 'sans-serif'
+
+    # Calculate percentages (baseline = 100%)
     baseline = normalized_sums[0]
-    ratios = [s / baseline for s in normalized_sums]
+    percentages = [(s / baseline) * 100 for s in normalized_sums]
 
-    # Create figure
-    fig, ax = plt.subplots(figsize=(10, 6))
-    plt.subplots_adjust(bottom=0.22, top=0.88)
+    # Create figure with specific size
+    fig, ax = plt.subplots(figsize=(10, 5))
+    plt.subplots_adjust(bottom=0.22, top=0.88, left=0.08, right=0.97)
 
-    # Bar positioning
-    x = np.arange(len(allocators))
-    bar_width = 0.6
-
-    # Convert ratios to percentages for display
-    percentages = [r * 100 for r in ratios]
+    # Bar properties - wider bars
+    n_allocators = len(allocators)
+    bar_width = 0.75
+    x_positions = range(n_allocators)
 
     # Create bars
-    bars = ax.bar(x, percentages, bar_width,
-                  color=[get_color(a) for a in allocators],
-                  edgecolor='none')
+    bars = []
+    for i, (allocator, pct) in enumerate(zip(allocators, percentages)):
+        color = get_color(allocator)
+        bar = ax.bar(i, pct, bar_width, color=color, edgecolor='none')
+        bars.append(bar[0])
 
-    # Add value labels above bars
-    for i, (bar, ratio) in enumerate(zip(bars, ratios)):
-        height = bar.get_height()
-        if i == 0:
-            label = "100% (baseline)"
-        else:
-            label = format_pct_diff(ratio)
-        ax.annotate(label,
-                    xy=(bar.get_x() + bar.get_width() / 2, height),
-                    xytext=(0, 3),
-                    textcoords='offset points',
-                    ha='center', va='bottom',
-                    fontsize=9, fontweight='bold',
-                    color='#333333')
+    # Set y-axis
+    max_pct = max(percentages)
+    ax.set_ylim(0, max(max_pct * 1.15, 115))
+    ax.set_ylabel('Time vs Baseline (%)', fontsize=11, color='#999999')
 
-    # Add horizontal line at 100% for reference
-    ax.axhline(y=100, color='#333333', linewidth=1.5, linestyle='--', alpha=0.7)
+    # Style y-axis
+    ax.yaxis.set_tick_params(colors='#999999')
+    for label in ax.get_yticklabels():
+        label.set_color('#999999')
+    ax.spines['left'].set_color('#999999')
 
-    # Styling
-    ax.set_xticks(x)
-    ax.set_xticklabels(allocators, fontsize=10)
-    ax.set_ylabel('Time vs Baseline (%)', fontsize=11)
-    ax.set_ylim(0, max(percentages) * 1.15)
+    # X-axis labels
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(allocators, fontsize=11)
 
-    # Grid
-    ax.yaxis.grid(True, linestyle='--', alpha=0.3)
+    # Grid - subtle horizontal lines
+    ax.yaxis.grid(True, linestyle='--', alpha=0.3, linewidth=0.5)
     ax.set_axisbelow(True)
 
+    # Fixed offset for labels (in points)
+    LABEL_OFFSET_ABOVE = 3  # Distance from bar top to bottom of absolute time label
+    LABEL_OFFSET_INSIDE = 6  # Distance from bar top to top of percentage label
+
+    # Add labels above and inside bars
+    for i, (bar, allocator, pct) in enumerate(zip(bars, allocators, percentages)):
+        bar_height = bar.get_height()
+        x_pos = bar.get_x() + bar.get_width() / 2
+
+        # Absolute time above bar
+        if allocator in absolute_times and absolute_times[allocator] > 0:
+            time_label = format_time(absolute_times[allocator])
+            ax.annotate(time_label,
+                       xy=(x_pos, bar_height),
+                       xytext=(0, LABEL_OFFSET_ABOVE),
+                       textcoords='offset points',
+                       ha='center', va='bottom',
+                       fontsize=9, fontweight='bold',
+                       color='#333333')
+
+        # Percentage label inside bar at top (fixed offset from top)
+        if allocator == allocators[0]:  # baseline
+            pct_label = "baseline"
+        else:
+            ratio = pct / 100.0
+            pct_label = format_pct_diff(ratio)
+
+        ax.annotate(pct_label,
+                   xy=(x_pos, bar_height),
+                   xytext=(0, -LABEL_OFFSET_INSIDE),
+                   textcoords='offset points',
+                   ha='center', va='top',
+                   fontsize=9, fontweight='bold',
+                   color='white')
+
     # Title
-    ax.set_title('Performance of simd-json with different allocators\n(Time vs baseline, lower is better)',
-                 fontsize=14, fontweight='bold', pad=15)
+    base_title = "Performance of simd-json with different allocators"
+    if title_suffix:
+        title = f"{base_title}{title_suffix}"
+    else:
+        title = f"{base_title}—time (lower is better)"
+    ax.set_title(title, fontsize=16, fontweight='bold', pad=15, color='#333333')
 
     # Remove top and right spines
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_color('#000000')
 
-    # Metadata
-    meta_lines = []
+    # Metadata - single line format
+    meta_parts = []
     if metadata.get('source'):
-        meta_lines.append(f"Source: {metadata['source']}")
+        meta_parts.append(f"Source: {metadata['source']}")
+    elif metadata.get('commit'):
+        meta_parts.append("Source: https://github.com/zooko/simd-json")
 
-    line1_parts = []
     if metadata.get('commit'):
-        line1_parts.append(f"Commit: {metadata['commit'][:12]}")
+        meta_parts.append(f"Commit: {metadata['commit'][:12]}")
     if metadata.get('git_status'):
-        line1_parts.append(f"Git status: {metadata['git_status']}")
-    if line1_parts:
-        meta_lines.append(" · ".join(line1_parts))
+        meta_parts.append(f'Git status: "{metadata["git_status"]}"')
 
     line2_parts = []
     if metadata.get('cpu'):
         line2_parts.append(f"CPU: {metadata['cpu']}")
     if metadata.get('os'):
         line2_parts.append(f"OS: {metadata['os']}")
-    if line2_parts:
-        meta_lines.append(" · ".join(line2_parts))
 
-    y_pos = 0.08
-    for line in meta_lines:
-        fig.text(0.5, y_pos, line, ha='center', fontsize=9, color='#666666', family='monospace')
-        y_pos -= 0.03
+    if meta_parts:
+        fig.text(0.5, 0.08, " · ".join(meta_parts), ha='center', fontsize=10, 
+                color='#666666', family='monospace')
+    if line2_parts:
+        fig.text(0.5, 0.03, " · ".join(line2_parts), ha='center', fontsize=10, 
+                color='#666666', family='monospace')
 
     plt.savefig(output_file, format='svg', bbox_inches='tight', dpi=150)
     plt.close()
+    print(f"\n📊 Graph saved to: {output_file}")
 
-    print(f"📊 Graph saved to: {output_file}")
+def main():
+    parser = argparse.ArgumentParser(description='Compare Criterion benchmark results across allocators')
+    parser.add_argument('files', nargs='+', help='Criterion output files to compare')
+    parser.add_argument('--title-suffix', default='',
+                       help='Suffix to add to graph title')
+    parser.add_argument('--commit', help='Git commit hash')
+    parser.add_argument('--git-status', help='Git status (Clean or Uncommitted changes)')
+    parser.add_argument('--cpu', help='CPU type')
+    parser.add_argument('--os', help='OS type')
+    parser.add_argument('--graph', help='Output SVG graph to this file')
+    parser.add_argument('--source', help='Source URL')
+    args = parser.parse_args()
 
-# Sort files in desired order
-sorted_files = sort_allocator_files(args.files)
-baseline_file = sorted_files[0]
-candidate_files = sorted_files[1:]
+    # Parse all files and get allocator names
+    file_data = {}
+    for f in args.files:
+        name = get_allocator_name(f)
+        file_data[name] = parse_file(f)
 
-baseline_results = parse_file(baseline_file)
-candidate_results = [parse_file(f) for f in candidate_files]
+    # Sort allocator names using the single canonical ordering
+    sorted_names = sort_allocators(list(file_data.keys()))
 
-# Get all test names (intersection of all files)
-all_tests = set(baseline_results.keys())
-for cand in candidate_results:
-    all_tests &= set(cand.keys())
-all_tests = sorted(all_tests)
+    # Get all test names (intersection of all files)
+    all_tests = None
+    for results in file_data.values():
+        if all_tests is None:
+            all_tests = set(results.keys())
+        else:
+            all_tests &= set(results.keys())
+    all_tests = sorted(all_tests) if all_tests else []
 
-if not all_tests:
-    print("No common tests found across all files.", file=sys.stderr)
-    sys.exit(1)
+    if not all_tests:
+        print("No common tests found across all files.", file=sys.stderr)
+        sys.exit(1)
 
-# Create column names from filenames
-col_names = [get_allocator_name(baseline_file)] + [get_allocator_name(f) for f in candidate_files]
+    # Baseline is first allocator in sorted order
+    baseline_name = sorted_names[0]
+    baseline_results = file_data[baseline_name]
 
-# Calculate max test name length for formatting
-max_test_len = max(len(t) for t in all_tests)
-col_width = 22  # "12345.67 µs (+123.4%)"
+    # Track normalized times and absolute times
+    normalized_sums = []
+    absolute_time_sums = []
 
-# Print header
-header = f"{'test':<{max_test_len}}"
-for name in col_names:
-    header += f"  {name:>{col_width}}"
-print(header)
-print("-" * len(header))
+    for name in sorted_names:
+        results = file_data[name]
+        norm_sum = 0.0
+        abs_sum = 0.0
+        for test in all_tests:
+            baseline_time = baseline_results[test]
+            test_time = results[test]
+            norm_sum += test_time / baseline_time
+            abs_sum += test_time
+        normalized_sums.append(norm_sum)
+        absolute_time_sums.append(abs_sum)
 
-# Track normalized times (time to do 1 seconds worth of baseline work per test)
-normalized_sums = [0.0] * len(col_names)
+    # Calculate average absolute times
+    num_tests = len(all_tests)
+    absolute_times = {name: total / num_tests for name, total in zip(sorted_names, absolute_time_sums)}
 
-# Print each row
-for test in all_tests:
-    baseline_time = baseline_results[test]
-    row = f"{test:<{max_test_len}}"
+    # Print summary
+    print(f"\nTests compared: {len(all_tests)}")
+    print(f"\n{'Allocator':<12} {'Normalized Sum':>16} {'vs Baseline':>12}")
+    print("-" * 44)
 
-    # Baseline column
-    time_str = format_time(baseline_time)
-    cell = f"{time_str} (  0.0%)"
-    row += f"  {cell:>{col_width}}"
-    normalized_sums[0] += 1.0
-
-    # Candidate columns
-    for i, cand in enumerate(candidate_results):
-        cand_time = cand[test]
-        relative = (cand_time - baseline_time) / baseline_time * 100
-        time_str = format_time(cand_time)
-        cell = f"{time_str} ({relative:>+5.1f}%)"
-        row += f"  {cell:>{col_width}}"
-        normalized_sums[i + 1] += 1.0 * (cand_time / baseline_time)
-
-    print(row)
-
-# Print normalized sums
-print("-" * len(header))
-sum_row = f"{'NORMALIZED (1s of baseline work per test)':<{max_test_len}}"
-for s in normalized_sums:
-    cell = f"{s:>8.1f} s  (     )"
-    sum_row += f"  {cell:>{col_width}}"
-print(sum_row)
-
-# Print relative to baseline
-rel_row = f"{'RELATIVE TO BASELINE':<{max_test_len}}"
-baseline_total = normalized_sums[0]
-for s in normalized_sums:
-    relative = (s - baseline_total) / baseline_total * 100
-    cell = f"{'':>8}   ({relative:>+5.1f}%)"
-    rel_row += f"  {cell:>{col_width}}"
-print(rel_row)
-
-# Print compact summary
-print("\n" + "=" * 60)
-print("BENCHMARK SUMMARY")
-print("=" * 60)
-print()
-print(f"{'Allocator':<12} {'Total Time (1s per test)':>24} {'vs Baseline':>12}")
-print("-" * 52)
-
-for i, (name, norm_sum) in enumerate(zip(col_names, normalized_sums)):
-    if i == 0:
-        vs_baseline = "baseline"
-    else:
+    baseline_total = normalized_sums[0]
+    for name, norm_sum in zip(sorted_names, normalized_sums):
         pct = (norm_sum - baseline_total) / baseline_total * 100
-        vs_baseline = f"{pct:+.1f}%"
-    print(f"{name:<12} {norm_sum:>22.1f} s {vs_baseline:>12}")
+        vs_baseline = "baseline" if name == sorted_names[0] else f"{pct:+.1f}%"
+        print(f"{name:<12} {norm_sum:>16.1f} {vs_baseline:>12}")
 
-# Generate graph if requested
-if args.graph:
-    metadata = {
-        'commit': args.commit,
-        'git_status': args.git_status,
-        'cpu': args.cpu,
-        'os': args.os,
-        'source': args.source or 'Unknown',
-    }
-    generate_graph(col_names, normalized_sums, metadata, args.graph)
+    # Generate graph if requested
+    if args.graph:
+        metadata = {
+            'commit': args.commit,
+            'git_status': args.git_status,
+            'cpu': args.cpu,
+            'os': args.os,
+            'source': args.source
+        }
+        generate_graph(sorted_names, normalized_sums, absolute_times, metadata, args.graph, args.title_suffix)
+
+if __name__ == '__main__':
+    main()
