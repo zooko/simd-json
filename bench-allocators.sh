@@ -1,5 +1,4 @@
 #!/bin/bash
-
 set -e
 
 BNAME="simd-json"
@@ -9,15 +8,22 @@ GITCOMMIT=$(git rev-parse HEAD)
 GITCLEANSTATUS=$( [ -z "$( git status --porcelain )" ] && echo \"Clean\" || echo \"Uncommitted changes\" )
 TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
-# CPU type on linuxy
-CPUTYPE=$(grep -m1 "model name" /proc/cpuinfo 2>/dev/null | cut -d':' -f2-)
-if [ -z "${CPUTYPE}" ] ; then
-    # CPU type on macos
-    CPUTYPE=$(sysctl -n machdep.cpu.brand_string 2>/dev/null || echo "Unknown")
+# Detect CPU type
+if [ -f /proc/cpuinfo ]; then
+    # Linux
+    CPUTYPE=$(grep -m1 "model name" /proc/cpuinfo | cut -d':' -f2-)
+elif command -v sysctl >/dev/null 2>&1; then
+    # macOS
+    CPUTYPE=$(sysctl -n machdep.cpu.brand_string 2>/dev/null)
 fi
+CPUTYPE=${CPUTYPE:-Unknown}
+CPUTYPE=${CPUTYPE## }  # Trim leading space
+
 CPUTYPESTR="${CPUTYPE//[^[:alnum:]]/}"
 OSTYPESTR="${OSTYPE//[^[:alnum:]]/}"
+
 ARGS=$*
+
 CPUSTR_DOT_OSSTR="${CPUTYPESTR}.${OSTYPESTR}"
 OUTPUT_DIR="${OUTPUT_DIR:-./benchmark-results}/${CPUSTR_DOT_OSSTR}"
 
