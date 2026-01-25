@@ -173,6 +173,7 @@ def generate_graph(allocators, normalized_sums, absolute_times, metadata, output
 
     # Build SVG
     svg_parts = []
+    svg_parts.append('<?xml version="1.0" encoding="UTF-8"?>')
 
     # SVG header
     svg_parts.append(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {svg_width} {svg_height}" width="{svg_width}" height="{svg_height}">')
@@ -293,7 +294,7 @@ def generate_graph(allocators, normalized_sums, absolute_times, metadata, output
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(svg_content)
 
-    print(f"\n📊 Graph saved to: {output_file}")
+    print(f"\nGraph saved to: {output_file}")
 
 def main():
     parser = argparse.ArgumentParser(description='Compare Criterion benchmark results across allocators')
