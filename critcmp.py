@@ -139,17 +139,15 @@ def rounded_rect_path(x, y, width, height, radius):
 
     return path
 
-def generate_graph(allocators, normalized_sums, absolute_times, metadata, output_file, title_suffix=''):
+def generate_graph(allocators, normalized_sums, metadata, output_file, title_suffix=''):
     """Generate SVG bar chart comparing allocator performance."""
 
     # Calculate percentages (baseline = 100%)
-    baseline = normalized_sums[0]
-    percentages = [(s / baseline) * 100 for s in normalized_sums]
+    baseline = normalized_sums[allocators[0]]
+    percentages = [(normalized_sums[a] / baseline) * 100 for a in allocators]
 
-    # Get baseline absolute time for y-axis label
-    baseline_allocator = allocators[0]
-    baseline_time_ns = absolute_times.get(baseline_allocator, 0)
-    baseline_time_str = format_time(baseline_time_ns)
+    # Get baseline time for y-axis label
+    baseline_time_str = format_time(baseline)
 
     # SVG dimensions and layout
     svg_width = 800
@@ -244,7 +242,7 @@ def generate_graph(allocators, normalized_sums, absolute_times, metadata, output
         svg_parts.append(f'  <text x="{name_x}" y="{name_y}" class="bar-label-name" text-anchor="middle">{escape_xml(allocator)}</text>')
 
         # Time value above bar
-        time_label = format_time(absolute_times[allocator])
+        time_label = format_time(normalized_sums[allocator])
         value_y = bar_y - 8
         svg_parts.append(f'  <text x="{name_x}" y="{value_y}" class="bar-label-value" text-anchor="middle">{escape_xml(time_label)}</text>')
 
@@ -339,34 +337,32 @@ def main():
     baseline_name = sorted_names[0]
     baseline_results = file_data[baseline_name]
 
-    # Track normalized times and absolute times
-    normalized_sums = []
-    absolute_time_sums = []
+    normalized_sums = {}
 
     for name in sorted_names:
         results = file_data[name]
         norm_sum = 0.0
-        abs_sum = 0.0
         for test in all_tests:
             baseline_time = baseline_results[test]
             test_time = results[test]
-            norm_sum += test_time / baseline_time
-            abs_sum += test_time
-        normalized_sums.append(norm_sum)
-        absolute_time_sums.append(abs_sum)
+            # Scale: how many iterations fit in 1 second at baseline speed?
+            iterations = 1e9 / baseline_time
+            # How long would this allocator take for that many iterations?
+            norm_sum += test_time * iterations
+        normalized_sums[name] = norm_sum
 
-    # Calculate average absolute times
-    num_tests = len(all_tests)
-    absolute_times = {name: total / num_tests for name, total in zip(sorted_names, absolute_time_sums)}
+    # Arithmetic mean ratio = allocator's sum / default's sum
+    baseline_sum = normalized_sums[baseline_name]
+    arith_mean_ratios = {name: normalized_sums[name] / baseline_sum for name in sorted_names}
 
     # Print summary
     print(f"\nTests compared: {len(all_tests)}")
     print(f"\n{'Allocator':<12} {'Normalized Sum':>16} {'vs Baseline':>12}")
     print("-" * 44)
 
-    baseline_total = normalized_sums[0]
-    for name, norm_sum in zip(sorted_names, normalized_sums):
-        pct = (norm_sum - baseline_total) / baseline_total * 100
+    for name in sorted_names:
+        norm_sum = normalized_sums[name]
+        pct = (norm_sum - baseline_sum) / baseline_sum * 100
         vs_baseline = "baseline" if name == sorted_names[0] else f"{pct:+.1f}%"
         print(f"{name:<12} {norm_sum:>16.1f} {vs_baseline:>12}")
 
@@ -380,7 +376,8 @@ def main():
             'cpucount': args.cpucount,
             'source': args.source
         }
-        generate_graph(sorted_names, normalized_sums, absolute_times, metadata, args.graph, args.title_suffix)
+
+        generate_graph(sorted_names, normalized_sums, metadata, args.graph, args.title_suffix)
 
 if __name__ == '__main__':
     main()
