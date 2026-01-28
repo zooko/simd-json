@@ -139,6 +139,42 @@ def rounded_rect_path(x, y, width, height, radius):
 
     return path
 
+def print_detailed_table(sorted_names, file_data, all_tests, baseline_name):
+    """Print detailed table showing each test's time across all allocators."""
+    baseline_results = file_data[baseline_name]
+
+    # Calculate column widths
+    max_test_len = max(len(t) for t in all_tests)
+    col_width = 22  # "12345.67 µs (+123.4%)"
+
+    # Print header
+    header = f"{'test':<{max_test_len}}"
+    for name in sorted_names:
+        header += f" {name:>{col_width}}"
+    print(header)
+    print("-" * len(header))
+
+    # Print each test row
+    for test in all_tests:
+        baseline_time = baseline_results[test]
+        row = f"{test:<{max_test_len}}"
+
+        for name in sorted_names:
+            test_time = file_data[name][test]
+            time_str = format_time(test_time)
+
+            if name == baseline_name:
+                cell = f"{time_str} (baseline)"
+            else:
+                pct = (test_time - baseline_time) / baseline_time * 100
+                cell = f"{time_str} ({pct:>+6.1f}%)"
+
+            row += f" {cell:>{col_width}}"
+
+        print(row)
+
+    print("-" * len(header))
+
 def generate_graph(allocators, normalized_sums, metadata, output_file, title_suffix=''):
     """Generate SVG bar chart comparing allocator performance."""
 
@@ -350,10 +386,16 @@ def main():
             # How long would this allocator take for that many iterations?
             norm_sum += test_time * iterations
         normalized_sums[name] = norm_sum
-
+        
     # Arithmetic mean ratio = allocator's sum / default's sum
     baseline_sum = normalized_sums[baseline_name]
     arith_mean_ratios = {name: normalized_sums[name] / baseline_sum for name in sorted_names}
+
+    # Print detailed table
+    print(f"\n{'='*60}")
+    print("DETAILED RESULTS BY TEST")
+    print(f"{'='*60}\n")
+    print_detailed_table(sorted_names, file_data, all_tests, baseline_name)
 
     # Print summary
     print(f"\nTests compared: {len(all_tests)}")
