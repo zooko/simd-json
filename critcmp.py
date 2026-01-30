@@ -1,47 +1,55 @@
 #!/usr/bin/env python3
-# Thanks to Claude (Opus 4.5 & Sonnet 4.5) for writing this to my specifications.
+"""
+Compare criterion benchmark results across multiple allocators.
+"""
 
-import sys
-import re
+# Thanks to Claude (Opus 4.5) for writing and updating this to my specifications.
+
 import argparse
+import re
 from collections import defaultdict
 
-# Allocator colors
-ALLOCATOR_COLORS = {
-    'default': '#78909c',   # blue-grey (distinct from smalloc green)
-    'glibc': '#5c6bc0',     # indigo
-    'jemalloc': '#66bb6a',  # green
-    'snmalloc': '#ab47bc',  # purple
-    'mimalloc': '#ffca28',  # amber
-    'rpmalloc': '#ff7043',  # deep orange
-    'smalloc': '#42a5f5',   # blue
-    'smalloc + ffi': '#93c2f9', # light blue
+# Configurable weights for different test categories
+# Higher weight = more importance in the final weighted sum
+WEIGHTS = {
+    "log/": 10000,
+    "event_stacktrace": 1000,
+    "github_events/": 100,
+    "apache_builds/": 100,
+    "twitter/": 10,
+    "citm_catalog/": 10,
+    "canada/": 1,
 }
-UNKNOWN_ALLOCATOR_COLOR = '#9e9e9e'  # gray
 
-# Canonical allocator ordering: default first, then these in order, then unknown, then smalloc last
-ALLOCATOR_ORDER = ['default', 'jemalloc', 'snmalloc', 'mimalloc', 'rpmalloc', 'smalloc']
+DEFAULT_WEIGHT = 100
 
-def get_color(name):
-    return ALLOCATOR_COLORS.get(name, UNKNOWN_ALLOCATOR_COLOR)
+# Allocator colors for SVG graph
+ALLOCATOR_COLORS = {
+    'default': '#78909c',
+    'glibc': '#5c6bc0',
+    'jemalloc': '#66bb6a',
+    'snmalloc': '#ab47bc',
+    'mimalloc': '#ffca28',
+    'rpmalloc': '#ff7043',
+    'smalloc': '#42a5f5',
+}
+UNKNOWN_ALLOCATOR_COLOR = '#9e9e9e'
 
-def sort_allocators(names):
-    """Sort allocator names in canonical order: default, known allocators, unknown, smalloc last."""
-    def sort_key(name):
-        if name in ALLOCATOR_ORDER:
-            return (0, ALLOCATOR_ORDER.index(name))
-        else:
-            # Unknown allocators go between rpmalloc and smalloc
-            return (0, ALLOCATOR_ORDER.index('smalloc') - 0.5)
-    return sorted(names, key=sort_key)
+def get_weight(test_name: str) -> int:
+    """Get the weight for a test based on its name prefix."""
+    for prefix, weight in WEIGHTS.items():
+        if test_name.startswith(prefix):
+            return weight
+    return DEFAULT_WEIGHT
 
-def parse_file(filename):
-    """Parse a Criterion benchmark output file and return {test_name: median_ns}."""
+def parse_file(filename: str) -> dict[str, float]:
+    """Parse a Criterion benchmark output file and return {test_name: time_in_seconds}."""
     results = {}
     with open(filename, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    # Match lines like: "test_name                  time:   [1.2345 µs 1.2456 µs 1.2567 µs]"
+    # Match lines like: "test_name time: [1.2345 µs 1.2456 µs 1.2567 µs]"
+    # The middle value is the median/point estimate
     pattern = r'^(\S+)\s+time:\s+\[[\d.]+ [µnms]+\s+([\d.]+)\s+([µnms]+)'
 
     for match in re.finditer(pattern, content, re.MULTILINE):
@@ -49,55 +57,44 @@ def parse_file(filename):
         median_value = float(match.group(2))
         unit = match.group(3)
 
-        # Convert to nanoseconds
-        multipliers = {'ns': 1, 'µs': 1000, 'ms': 1_000_000, 's': 1_000_000_000}
-        median_ns = median_value * multipliers.get(unit, 1)
-        results[test_name] = median_ns
+        # Convert to seconds
+        multipliers = {'ns': 1e-9, 'µs': 1e-6, 'ms': 1e-3, 's': 1}
+        time_seconds = median_value * multipliers.get(unit, 1)
+        results[test_name] = time_seconds
 
     return results
 
-def format_time(ns):
-    """Format nanoseconds as human-readable string."""
-    if ns >= 1_000_000_000:
-        val = ns / 1_000_000_000
-        if val >= 100:
-            return f"{val:.0f}s"
-        elif val >= 10:
-            return f"{val:.1f}s"
-        else:
-            return f"{val:.2f}s"
-    elif ns >= 1_000_000:
-        val = ns / 1_000_000
-        if val >= 100:
-            return f"{val:.0f}ms"
-        elif val >= 10:
-            return f"{val:.1f}ms"
-        else:
-            return f"{val:.2f}ms"
-    elif ns >= 1_000:
-        val = ns / 1_000
-        if val >= 100:
-            return f"{val:.0f}μs"
-        elif val >= 10:
-            return f"{val:.1f}μs"
-        else:
-            return f"{val:.2f}μs"
+def format_time(seconds: float) -> str:
+    """Format time in appropriate units."""
+    if seconds >= 1:
+        return f"{seconds:.2f}s"
+    elif seconds >= 0.001:
+        return f"{seconds * 1000:.2f}ms"
+    elif seconds >= 0.000001:
+        return f"{seconds * 1_000_000:.2f}µs"
     else:
-        if ns >= 100:
-            return f"{ns:.0f}ns"
-        elif ns >= 10:
-            return f"{ns:.1f}ns"
-        else:
-            return f"{ns:.2f}ns"
+        return f"{seconds * 1_000_000_000:.1f}ns"
 
-def get_allocator_name(filename):
-    """Extract allocator name from filename."""
-    basename = filename.rsplit('/', 1)[-1]  # Get just the filename
-    name = basename.replace('.txt', '').replace('.bench', '').replace('criterion-', '')
-    return name
+def format_time_fixed_width(seconds: float, width: int = 8) -> str:
+    """Format time in milliseconds with 1 decimal place, fixed width."""
+    ms = seconds * 1000
+    return f"{ms:.1f}".rjust(width)
 
-def format_pct_diff(ratio):
-    """Format percentage difference from baseline."""
+def format_diff(baseline: float, current: float) -> str:
+    """Format the percentage difference from baseline."""
+    if baseline == 0:
+        return "(  N/A )"
+    diff_pct = ((current - baseline) / baseline) * 100
+    rounded_pct = round(diff_pct)
+    if rounded_pct > 0:
+        return f"({rounded_pct:+4d}%)"
+    elif rounded_pct < 0:
+        return f"({rounded_pct:+4d}%)"
+    else:
+        return "(   0%)"
+
+def format_pct_diff(ratio: float) -> str:
+    """Format percentage difference from baseline for graph labels."""
     pct_diff = (ratio - 1.0) * 100
     if abs(pct_diff) < 0.5:
         return "0%"
@@ -106,86 +103,162 @@ def format_pct_diff(ratio):
     else:
         return f"{int(round(pct_diff))}%"
 
-def escape_xml(text):
+def get_color(name: str) -> str:
+    """Get color for an allocator."""
+    return ALLOCATOR_COLORS.get(name, UNKNOWN_ALLOCATOR_COLOR)
+
+def escape_xml(text: str) -> str:
     """Escape special XML characters."""
     return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
 
-def rounded_rect_path(x, y, width, height, radius):
+def rounded_rect_path(x: float, y: float, width: float, height: float, radius: float) -> str:
     """Generate SVG path for rectangle with only top corners rounded."""
-    # Ensure radius doesn't exceed half the width or height
     r = min(radius, width / 2, height / 2)
+    return (
+        f"M {x} {y + height}"
+        f" L {x + width} {y + height}"
+        f" L {x + width} {y + r}"
+        f" A {r} {r} 0 0 0 {x + width - r} {y}"
+        f" L {x + r} {y}"
+        f" A {r} {r} 0 0 0 {x} {y + r}"
+        f" Z"
+    )
 
-    # Start at bottom-left, go clockwise
-    # Bottom-left corner (sharp)
-    path = f"M {x} {y + height}"
+def print_results(allocators: list[str], all_results: dict[str, dict[str, float]], 
+                  sorted_tests: list[str]) -> dict[str, float]:
+    """Print the results table and return weighted sums."""
 
-    # Bottom edge to bottom-right (sharp corner)
-    path += f" L {x + width} {y + height}"
+    if not allocators or not sorted_tests:
+        print("No data to display.")
+        return {}
 
-    # Right edge up to where top-right curve starts
-    path += f" L {x + width} {y + r}"
+    baseline_alloc = allocators[0]
 
-    # Top-right rounded corner (arc)
-    path += f" A {r} {r} 0 0 0 {x + width - r} {y}"
+    # Find the longest test name for formatting
+    max_test_len = max(len(t) for t in sorted_tests)
+    max_test_len = max(max_test_len, 4)  # At least "test"
 
-    # Top edge to where top-left curve starts
-    path += f" L {x + r} {y}"
-
-    # Top-left rounded corner (arc)
-    path += f" A {r} {r} 0 0 0 {x} {y + r}"
-
-    # Left edge back to start
-    path += f" Z"
-
-    return path
-
-def print_detailed_table(sorted_names, file_data, all_tests, baseline_name):
-    """Print detailed table showing each test's time across all allocators."""
-    baseline_results = file_data[baseline_name]
-
-    # Calculate column widths
-    max_test_len = max(len(t) for t in all_tests)
-    col_width = 22  # "12345.67 µs (+123.4%)"
+    # Column widths
+    weight_width = 6
+    time_width = 8
+    diff_width = 7
+    col_width = time_width + 1 + diff_width
 
     # Print header
-    header = f"{'test':<{max_test_len}}"
-    for name in sorted_names:
-        header += f" {name:>{col_width}}"
-    print(header)
-    print("-" * len(header))
+    print()
+
+    # Allocator names row
+    header1 = " " * (max_test_len + 2) + " " * (weight_width + 2)
+    for alloc in allocators:
+        header1 += f"{alloc:^{col_width}}  "
+    print(header1)
+
+    # Separator row
+    header2 = " " * (max_test_len + 2) + " " * (weight_width + 2)
+    for _ in allocators:
+        header2 += "-" * col_width + "  "
+    print(header2)
+
+    # Column labels row
+    header3 = f"{'test':<{max_test_len}}  {'weight':>{weight_width}}"
+    for _ in allocators:
+         header3 += f"  {'time ms':>{time_width}} {'(diff%)':>{diff_width}}"
+    print(header3)
+
+    # Underline row
+    header4 = f"{'-' * 4:<{max_test_len}}  {'-' * weight_width:>{weight_width}}"
+    for _ in allocators:
+        header4 += f"  {'-' * time_width} {'-' * diff_width}"
+    print(header4)
+
+    total_width = max_test_len + 2 + weight_width + len(allocators) * (2 + col_width)
+
+    # Track weighted sums
+    weighted_sums: dict[str, float] = defaultdict(float)
+    test_count = 0
 
     # Print each test row
-    for test in all_tests:
-        baseline_time = baseline_results[test]
-        row = f"{test:<{max_test_len}}"
+    for test in sorted_tests:
+        weight = get_weight(test)
 
-        for name in sorted_names:
-            test_time = file_data[name][test]
-            time_str = format_time(test_time)
+        # Check if baseline has this test
+        if test not in all_results.get(baseline_alloc, {}):
+            continue
 
-            if name == baseline_name:
-                cell = f"{time_str} (baseline)"
+        baseline_time = all_results[baseline_alloc][test]
+        baseline_weighted = baseline_time * weight
+
+        row = f"{test:<{max_test_len}}  {weight:>{weight_width}}"
+
+        for alloc in allocators:
+            if test in all_results.get(alloc, {}):
+                raw_time = all_results[alloc][test]
+                weighted_time = raw_time * weight
+                weighted_sums[alloc] += weighted_time
+
+                time_str = format_time_fixed_width(weighted_time, time_width)
+
+                if alloc == baseline_alloc:
+                    diff_str = "( base)"
+                else:
+                    diff_str = format_diff(baseline_weighted, weighted_time)
+
+                row += f"  {time_str} {diff_str}"
             else:
-                pct = (test_time - baseline_time) / baseline_time * 100
-                cell = f"{time_str} ({pct:>+6.1f}%)"
+                row += f"  {'N/A':>{time_width}} {'':>{diff_width}}"
 
-            row += f" {cell:>{col_width}}"
-
+        test_count += 1
         print(row)
 
-    print("-" * len(header))
+    # Print summary
+    print("-" * total_width)
 
-def generate_graph(allocators, normalized_sums, metadata, output_file, title_suffix=''):
+    # SUM row
+    sum_row = f"{'SUM':<{max_test_len}}  {'':{weight_width}}"
+    baseline_sum = weighted_sums.get(baseline_alloc, 0)
+    for alloc in allocators:
+        alloc_sum = weighted_sums[alloc]
+        time_str = format_time_fixed_width(alloc_sum, time_width)
+        if alloc == baseline_alloc:
+            diff_str = "( base)"
+        else:
+            diff_str = format_diff(baseline_sum, alloc_sum)
+        sum_row += f"  {time_str} {diff_str}"
+    print(sum_row)
+
+    print("-" * total_width)
+    print()
+    print(f"Tests compared: {test_count}")
+    print()
+
+    # Final summary table
+    print(f"{'Allocator':<15} {'Weighted Sum':>12} vs Baseline")
+    print("-" * 15 + " " + "-" * 12 + " " + "-" * 11)
+    for alloc in allocators:
+        alloc_sum = weighted_sums[alloc]
+        time_str = format_time_fixed_width(alloc_sum, time_width)
+        if alloc == baseline_alloc:
+            diff_str = "   baseline"
+        else:
+            diff_str = "    " + format_diff(baseline_sum, alloc_sum)
+        print(f"{alloc:<15} {time_str:>12} {diff_str}")
+
+    return dict(weighted_sums)
+
+def generate_graph(allocators: list[str], weighted_sums: dict[str, float], 
+                   metadata: dict, output_file: str, title_suffix: str = ''):
     """Generate SVG bar chart comparing allocator performance."""
 
-    # Calculate percentages (baseline = 100%)
-    baseline = normalized_sums[allocators[0]]
-    percentages = [(normalized_sums[a] / baseline) * 100 for a in allocators]
+    baseline = weighted_sums.get(allocators[0], 0)
 
-    # Get baseline time for y-axis label
+    if baseline == 0:
+        print("Warning: Baseline has no data, skipping graph generation.")
+        return
+
+    percentages = [(weighted_sums.get(a, 0) / baseline) * 100 for a in allocators]
     baseline_time_str = format_time(baseline)
 
-    # SVG dimensions and layout
+    # SVG dimensions
     svg_width = 800
     svg_height = 450
     margin_left = 80
@@ -201,21 +274,13 @@ def generate_graph(allocators, normalized_sums, metadata, output_file, title_suf
     bar_width = bar_spacing * 0.7
     corner_radius = 8
 
-    # Y-axis scale
     max_pct = max(percentages)
     y_max = max(max_pct * 1.15, 115)
 
-    # Build SVG
-    svg_parts = []
-    svg_parts.append('<?xml version="1.0" encoding="UTF-8"?>')
-
-    # SVG header
+    svg_parts = ['<?xml version="1.0" encoding="UTF-8"?>']
     svg_parts.append(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {svg_width} {svg_height}" width="{svg_width}" height="{svg_height}">')
-
-    # Background
     svg_parts.append(f'  <rect width="{svg_width}" height="{svg_height}" fill="white"/>')
 
-    # Styles
     svg_parts.append('''  <style>
     .title { font-family: Arial, Helvetica, sans-serif; font-size: 18px; font-weight: bold; fill: #333333; }
     .axis-label { font-family: Arial, Helvetica, sans-serif; font-size: 12px; fill: #666666; }
@@ -229,70 +294,49 @@ def generate_graph(allocators, normalized_sums, metadata, output_file, title_suf
 
     # Title
     base_title = "Performance of simd-json with different allocators"
-    if title_suffix:
-        title = f"{base_title}{title_suffix}"
-    else:
-        title = f"{base_title}—time (lower is better)"
-    title_x = svg_width / 2
-    title_y = 35
-    svg_parts.append(f'  <text x="{title_x}" y="{title_y}" class="title" text-anchor="middle">{escape_xml(title)}</text>')
+    title = f"{base_title}{title_suffix}" if title_suffix else f"{base_title}—time (lower is better)"
+    svg_parts.append(f'  <text x="{svg_width / 2}" y="35" class="title" text-anchor="middle">{escape_xml(title)}</text>')
 
-    # Y-axis label (rotated)
+    # Y-axis label
     y_label = f"Time vs Baseline (%, baseline = {baseline_time_str})"
-    y_label_x = 20
     y_label_y = margin_top + chart_height / 2
-    svg_parts.append(f'  <text x="{y_label_x}" y="{y_label_y}" class="axis-label" text-anchor="middle" transform="rotate(-90 {y_label_x} {y_label_y})">{escape_xml(y_label)}</text>')
+    svg_parts.append(f'  <text x="20" y="{y_label_y}" class="axis-label" text-anchor="middle" transform="rotate(-90 20 {y_label_y})">{escape_xml(y_label)}</text>')
 
-    # Grid lines and Y-axis ticks
+    # Grid lines and ticks
     y_ticks = [0, 20, 40, 60, 80, 100]
     if y_max > 100:
-        y_ticks.append(int(y_max // 20 * 20))
+        # Add ticks up to y_max in increments of 20
+        tick = 120
+        while tick <= y_max:
+            y_ticks.append(tick)
+            tick += 20
 
     for tick in y_ticks:
         if tick > y_max:
             continue
         y_pos = margin_top + chart_height - (tick / y_max * chart_height)
-
-        # Grid line
         svg_parts.append(f'  <line x1="{margin_left}" y1="{y_pos}" x2="{margin_left + chart_width}" y2="{y_pos}" class="grid-line"/>')
-
-        # Tick label
-        svg_parts.append(f'  <text x="{margin_left - 10}" y="{y_pos + 4}" class="tick-label" text-anchor="end">{tick}</text>')
+        svg_parts.append(f'  <text x="{margin_left - 10}" y="{y_pos + 4}" class="tick-label" text-anchor="end">{tick}%</text>')
 
     # Bars
     for i, (allocator, pct) in enumerate(zip(allocators, percentages)):
         color = get_color(allocator)
-
-        # Bar position
         bar_x = margin_left + i * bar_spacing + (bar_spacing - bar_width) / 2
         bar_height = (pct / y_max) * chart_height
         bar_y = margin_top + chart_height - bar_height
 
-        # Draw bar with rounded top corners
         path = rounded_rect_path(bar_x, bar_y, bar_width, bar_height, corner_radius)
         svg_parts.append(f'  <path d="{path}" fill="{color}"/>')
 
-        # Allocator name below bar
         name_x = bar_x + bar_width / 2
-        name_y = margin_top + chart_height + 20
-        svg_parts.append(f'  <text x="{name_x}" y="{name_y}" class="bar-label-name" text-anchor="middle">{escape_xml(allocator)}</text>')
+        svg_parts.append(f'  <text x="{name_x}" y="{margin_top + chart_height + 20}" class="bar-label-name" text-anchor="middle">{escape_xml(allocator)}</text>')
 
-        # Time value above bar
-        time_label = format_time(normalized_sums[allocator])
-        value_y = bar_y - 8
-        svg_parts.append(f'  <text x="{name_x}" y="{value_y}" class="bar-label-value" text-anchor="middle">{escape_xml(time_label)}</text>')
+        time_label = format_time(weighted_sums.get(allocator, 0))
+        svg_parts.append(f'  <text x="{name_x}" y="{bar_y - 8}" class="bar-label-value" text-anchor="middle">{escape_xml(time_label)}</text>')
 
-        # Percentage inside bar (near top)
-        if allocator == allocators[0]:  # baseline
-            pct_label = "baseline"
-        else:
-            ratio = pct / 100.0
-            pct_label = format_pct_diff(ratio)
-        pct_y = bar_y + 18
-
-        # Only show if bar is tall enough
+        pct_label = "baseline" if allocator == allocators[0] else format_pct_diff(pct / 100.0)
         if bar_height > 35:
-            svg_parts.append(f'  <text x="{name_x}" y="{pct_y}" class="bar-label-pct" text-anchor="middle">{escape_xml(pct_label)}</text>')
+            svg_parts.append(f'  <text x="{name_x}" y="{bar_y + 18}" class="bar-label-pct" text-anchor="middle">{escape_xml(pct_label)}</text>')
 
     # Metadata
     meta_parts = []
@@ -315,28 +359,21 @@ def generate_graph(allocators, normalized_sums, metadata, output_file, title_suf
 
     meta_y = svg_height - 35
     if meta_parts:
-        meta_text = " · ".join(meta_parts)
-        svg_parts.append(f'  <text x="{svg_width / 2}" y="{meta_y}" class="metadata" text-anchor="middle">{escape_xml(meta_text)}</text>')
-
+        svg_parts.append(f'  <text x="{svg_width / 2}" y="{meta_y}" class="metadata" text-anchor="middle">{escape_xml(" · ".join(meta_parts))}</text>')
     if line2_parts:
-        line2_text = " · ".join(line2_parts)
-        svg_parts.append(f'  <text x="{svg_width / 2}" y="{meta_y + 15}" class="metadata" text-anchor="middle">{escape_xml(line2_text)}</text>')
+        svg_parts.append(f'  <text x="{svg_width / 2}" y="{meta_y + 15}" class="metadata" text-anchor="middle">{escape_xml(" · ".join(line2_parts))}</text>')
 
-    # Close SVG
     svg_parts.append('</svg>')
 
-    # Write to file
-    svg_content = '\n'.join(svg_parts)
     with open(output_file, 'w', encoding='utf-8') as f:
-        f.write(svg_content)
+        f.write('\n'.join(svg_parts))
 
     print(f"\nGraph saved to: {output_file}")
 
 def main():
     parser = argparse.ArgumentParser(description='Compare Criterion benchmark results across allocators')
     parser.add_argument('files', nargs='+', help='Criterion output files to compare')
-    parser.add_argument('--title-suffix', default='',
-                        help='Suffix to add to graph title')
+    parser.add_argument('--title-suffix', default='', help='Suffix to add to graph title')
     parser.add_argument('--commit', help='Git commit hash')
     parser.add_argument('--git-status', help='Git status (Clean or Uncommitted changes)')
     parser.add_argument('--cpu', help='CPU type')
@@ -347,66 +384,26 @@ def main():
 
     args = parser.parse_args()
 
-    # Parse all files and get allocator names
-    file_data = {}
-    for f in args.files:
-        name = get_allocator_name(f)
-        file_data[name] = parse_file(f)
+    # Parse all results - extract allocator name from filename
+    all_results: dict[str, dict[str, float]] = {}
+    allocators: list[str] = []
 
-    # Sort allocator names using the single canonical ordering
-    sorted_names = sort_allocators(list(file_data.keys()))
+    for filepath in args.files:
+        # Extract allocator name from filename (e.g., "tmp/default" -> "default")
+        allocator_name = filepath.rsplit('/', 1)[-1].replace('.txt', '').replace('.bench', '')
+        allocators.append(allocator_name)
+        all_results[allocator_name] = parse_file(filepath)
 
-    # Get all test names (intersection of all files)
-    all_tests = None
-    for results in file_data.values():
-        if all_tests is None:
-            all_tests = set(results.keys())
-        else:
-            all_tests &= set(results.keys())
-    all_tests = sorted(all_tests) if all_tests else []
+    # Get all unique test names
+    all_tests: set[str] = set()
+    for results in all_results.values():
+        all_tests.update(results.keys())
 
-    if not all_tests:
-        print("No common tests found across all files.", file=sys.stderr)
-        sys.exit(1)
+    # Sort tests by weight (descending) then name
+    sorted_tests = sorted(all_tests, key=lambda t: (-get_weight(t), t))
 
-    # Baseline is first allocator in sorted order
-    baseline_name = sorted_names[0]
-    baseline_results = file_data[baseline_name]
-
-    normalized_sums = {}
-
-    for name in sorted_names:
-        results = file_data[name]
-        norm_sum = 0.0
-        for test in all_tests:
-            baseline_time = baseline_results[test]
-            test_time = results[test]
-            # Scale: how many iterations fit in 1 second at baseline speed?
-            iterations = 1e9 / baseline_time
-            # How long would this allocator take for that many iterations?
-            norm_sum += test_time * iterations
-        normalized_sums[name] = norm_sum
-        
-    # Arithmetic mean ratio = allocator's sum / default's sum
-    baseline_sum = normalized_sums[baseline_name]
-    arith_mean_ratios = {name: normalized_sums[name] / baseline_sum for name in sorted_names}
-
-    # Print detailed table
-    print(f"\n{'='*60}")
-    print("DETAILED RESULTS BY TEST")
-    print(f"{'='*60}\n")
-    print_detailed_table(sorted_names, file_data, all_tests, baseline_name)
-
-    # Print summary
-    print(f"\nTests compared: {len(all_tests)}")
-    print(f"\n{'Allocator':<12} {'Normalized Sum':>16} {'vs Baseline':>12}")
-    print("-" * 44)
-
-    for name in sorted_names:
-        norm_sum = normalized_sums[name]
-        pct = (norm_sum - baseline_sum) / baseline_sum * 100
-        vs_baseline = "baseline" if name == sorted_names[0] else f"{pct:+.1f}%"
-        print(f"{name:<12} {norm_sum:>16.1f} {vs_baseline:>12}")
+    # Print results and get weighted sums
+    weighted_sums = print_results(allocators, all_results, sorted_tests)
 
     # Generate graph if requested
     if args.graph:
@@ -418,8 +415,7 @@ def main():
             'cpucount': args.cpucount,
             'source': args.source
         }
+        generate_graph(allocators, weighted_sums, metadata, args.graph, args.title_suffix)
 
-        generate_graph(sorted_names, normalized_sums, metadata, args.graph, args.title_suffix)
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
