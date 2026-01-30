@@ -8,3 +8,4 @@ proptest-regressions
 .vscode
 rust-toolchain
 tmp
+benchmark-results
