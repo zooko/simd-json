@@ -5,8 +5,11 @@ BNAME="simd-json"
 
 # Collect metadata
 GITSOURCE=$(git remote get-url origin)
+[[ "$GITSOURCE" == git@* ]] && GITSOURCE=$(echo "$GITSOURCE" | sed 's|^git@\([^:]*\):\(.*\)|https://\1/\2|')
+GITSOURCE="${GITSOURCE%.git}"
+
 GITCOMMIT=$(git rev-parse HEAD)
-GITCLEANSTATUS=$( [ -z "$( git status --porcelain )" ] && echo \"Clean\" || echo \"Uncommitted changes\" )
+GITCLEANSTATUS=$( [ -z "$( git status --porcelain )" ] && echo Clean || echo Uncommitted changes )
 TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
 # Detect CPU type
@@ -40,6 +43,8 @@ mkdir -p ${OUTPUT_DIR}
 mkdir -p tmp
 rm -f $RESF $GRAPHF
 
+echo "TIMESTAMP: ${TIMESTAMP}" 2>&1 | tee -a $RESF
+echo "GITSOURCE: ${GITSOURCE}" 2>&1 | tee -a $RESF
 echo "GITCOMMIT: ${GITCOMMIT}" 2>&1 | tee -a $RESF
 echo "GITCLEANSTATUS: ${GITCLEANSTATUS}" 2>&1 | tee -a $RESF
 echo "CPUTYPE: ${CPUTYPE}" 2>&1 | tee -a $RESF
@@ -66,6 +71,7 @@ done
 
 # Generate comparison with metadata passed as arguments
 ./critcmp.py tmp/default $TMPALLOS \
+    --timestamp "$TIMESTAMP" \
     --source "$GITSOURCE" \
     --commit "$GITCOMMIT" \
     --git-status "$GITCLEANSTATUS" \
