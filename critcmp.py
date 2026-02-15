@@ -341,7 +341,6 @@ def generate_graph(allocators: list[str], weighted_sums: dict[str, float],
     # Metadata
     meta_y = svg_height - 50
 
-    # Metadata
     meta_parts = []
     if metadata.get('timestamp'):
         meta_parts.append(f"Timestamp: {metadata['timestamp']}")
