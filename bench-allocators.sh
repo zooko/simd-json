@@ -4,13 +4,13 @@ set -e
 BNAME="simd-json"
 
 # Collect metadata
+TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 GITSOURCE=$(git remote get-url origin)
 [[ "$GITSOURCE" == git@* ]] && GITSOURCE=$(echo "$GITSOURCE" | sed 's|^git@\([^:]*\):\(.*\)|https://\1/\2|')
 GITSOURCE="${GITSOURCE%.git}"
 
 GITCOMMIT=$(git rev-parse HEAD)
 GITCLEANSTATUS=$( [ -z "$( git status --porcelain )" ] && echo Clean || echo Uncommitted changes )
-TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
 # Detect CPU type
 if command -v lscpu >/dev/null 2>&1; then
