@@ -9,6 +9,11 @@ import argparse
 import re
 from collections import defaultdict
 
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import metadata
+
 # Configurable weights for different test categories
 # Higher weight = more importance in the final weighted sum
 WEIGHTS = {
@@ -22,18 +27,6 @@ WEIGHTS = {
 }
 
 DEFAULT_WEIGHT = 100
-
-# Allocator colors for SVG graph
-ALLOCATOR_COLORS = {
-    'default': '#78909c',
-    'glibc': '#5c6bc0',
-    'jemalloc': '#66bb6a',
-    'snmalloc': '#ab47bc',
-    'mimalloc': '#ffca28',
-    'rpmalloc': '#ff7043',
-    'smalloc': '#42a5f5',
-}
-UNKNOWN_ALLOCATOR_COLOR = '#9e9e9e'
 
 def get_weight(test_name: str) -> int:
     """Get the weight for a test based on its name prefix."""
@@ -102,14 +95,6 @@ def format_pct_diff(ratio: float) -> str:
         return f"+{int(round(pct_diff))}%"
     else:
         return f"{int(round(pct_diff))}%"
-
-def get_color(name: str) -> str:
-    """Get color for an allocator."""
-    return ALLOCATOR_COLORS.get(name, UNKNOWN_ALLOCATOR_COLOR)
-
-def escape_xml(text: str) -> str:
-    """Escape special XML characters."""
-    return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
 
 def rounded_rect_path(x: float, y: float, width: float, height: float, radius: float) -> str:
     """Generate SVG path for rectangle with only top corners rounded."""
@@ -246,7 +231,7 @@ def print_results(allocators: list[str], all_results: dict[str, dict[str, float]
     return dict(weighted_sums)
 
 def generate_graph(allocators: list[str], weighted_sums: dict[str, float], 
-                   metadata: dict, output_file: str, title_suffix: str = ''):
+                   metadata_dict: dict, output_file: str, title_suffix: str = ''):
     """Generate SVG bar chart comparing allocator performance."""
 
     baseline = weighted_sums.get(allocators[0], 0)
@@ -295,12 +280,12 @@ def generate_graph(allocators: list[str], weighted_sums: dict[str, float],
     # Title
     base_title = "Performance of simd-json with different allocators"
     title = f"{base_title}{title_suffix}" if title_suffix else f"{base_title}—time (lower is better)"
-    svg_parts.append(f'  <text x="{svg_width / 2}" y="35" class="title" text-anchor="middle">{escape_xml(title)}</text>')
+    svg_parts.append(f'  <text x="{svg_width / 2}" y="35" class="title" text-anchor="middle">{metadata.escape_xml(title)}</text>')
 
     # Y-axis label
     y_label = f"Time vs Baseline (%, baseline = {baseline_time_str})"
     y_label_y = margin_top + chart_height / 2
-    svg_parts.append(f'  <text x="20" y="{y_label_y}" class="axis-label" text-anchor="middle" transform="rotate(-90 20 {y_label_y})">{escape_xml(y_label)}</text>')
+    svg_parts.append(f'  <text x="20" y="{y_label_y}" class="axis-label" text-anchor="middle" transform="rotate(-90 20 {y_label_y})">{metadata.escape_xml(y_label)}</text>')
 
     # Grid lines and ticks
     y_ticks = [0, 20, 40, 60, 80, 100]
@@ -320,7 +305,7 @@ def generate_graph(allocators: list[str], weighted_sums: dict[str, float],
 
     # Bars
     for i, (allocator, pct) in enumerate(zip(allocators, percentages)):
-        color = get_color(allocator)
+        color = metadata.get_color(allocator)
         bar_x = margin_left + i * bar_spacing + (bar_spacing - bar_width) / 2
         bar_height = (pct / y_max) * chart_height
         bar_y = margin_top + chart_height - bar_height
@@ -329,47 +314,17 @@ def generate_graph(allocators: list[str], weighted_sums: dict[str, float],
         svg_parts.append(f'  <path d="{path}" fill="{color}"/>')
 
         name_x = bar_x + bar_width / 2
-        svg_parts.append(f'  <text x="{name_x}" y="{margin_top + chart_height + 20}" class="bar-label-name" text-anchor="middle">{escape_xml(allocator)}</text>')
+        svg_parts.append(f'  <text x="{name_x}" y="{margin_top + chart_height + 20}" class="bar-label-name" text-anchor="middle">{metadata.escape_xml(allocator)}</text>')
 
         time_label = format_time(weighted_sums.get(allocator, 0))
-        svg_parts.append(f'  <text x="{name_x}" y="{bar_y - 8}" class="bar-label-value" text-anchor="middle">{escape_xml(time_label)}</text>')
+        svg_parts.append(f'  <text x="{name_x}" y="{bar_y - 8}" class="bar-label-value" text-anchor="middle">{metadata.escape_xml(time_label)}</text>')
 
         pct_label = "baseline" if allocator == allocators[0] else format_pct_diff(pct / 100.0)
         if bar_height > 35:
-            svg_parts.append(f'  <text x="{name_x}" y="{bar_y + 18}" class="bar-label-pct" text-anchor="middle">{escape_xml(pct_label)}</text>')
+            svg_parts.append(f'  <text x="{name_x}" y="{bar_y + 18}" class="bar-label-pct" text-anchor="middle">{metadata.escape_xml(pct_label)}</text>')
 
-    # Metadata
-    meta_y = svg_height - 50
-
-    meta_parts = []
-    if metadata.get('timestamp'):
-        meta_parts.append(f"Timestamp: {metadata['timestamp']}")
-
-    if meta_parts:
-        svg_parts.append(f'  <text x="{svg_width/2}" y="{meta_y}" class="metadata" text-anchor="middle">{escape_xml(" · ".join(meta_parts))}</text>\n')
-
-    line2_parts = []
-    if metadata.get('source'):
-        line2_parts.append(f"Source: {metadata['source']}")
-    if metadata.get('commit'):
-        line2_parts.append(f"Commit: {metadata['commit'][:12]}")
-    if metadata.get('git_status'):
-        line2_parts.append(f"Git status: {metadata['git_status']}")
-
-    if line2_parts:
-        svg_parts.append(f'  <text x="{svg_width/2}" y="{meta_y + 15}" class="metadata" text-anchor="middle">{escape_xml(" · ".join(line2_parts))}</text>\n')
-
-    line3_parts = []
-    if metadata.get('cpu'):
-        line3_parts.append(f"CPU: {metadata['cpu']}")
-    if metadata.get('os'):
-        line3_parts.append(f"OS: {metadata['os']}")
-    if metadata.get('cpucount'):
-        line3_parts.append(f"CPU Count: {metadata['cpucount']}")
-
-    if line3_parts:
-        svg_parts.append(f'  <text x="{svg_width/2}" y="{meta_y + 30}" class="metadata" text-anchor="middle">{escape_xml(" · ".join(line3_parts))}</text>\n')
-
+    metadata.add_svg_metadata(metadata_dict, svg_height - 50, svg_parts, svg_width)
+    
     svg_parts.append('</svg>')
 
     with open(output_file, 'w', encoding='utf-8') as f:
@@ -380,15 +335,9 @@ def generate_graph(allocators: list[str], weighted_sums: dict[str, float],
 def main():
     parser = argparse.ArgumentParser(description='Compare Criterion benchmark results across allocators')
     parser.add_argument('files', nargs='+', help='Criterion output files to compare')
-    parser.add_argument('--timestamp', help='When the benchmarking process started')
-    parser.add_argument('--source', help='Source URL')
-    parser.add_argument('--commit', help='Git commit hash')
-    parser.add_argument('--git-status', help='Git status (Clean or Uncommitted changes)')
-    parser.add_argument('--cpu', help='CPU type')
-    parser.add_argument('--os', help='OS type')
-    parser.add_argument('--cpucount', help='Number of CPUs')
-    parser.add_argument('--graph', help='Output SVG graph to this file')
     parser.add_argument('--title-suffix', default='', help='Suffix to add to graph title')
+
+    metadata.add_parse_args(parser)
 
     args = parser.parse_args()
 
@@ -415,16 +364,7 @@ def main():
 
     # Generate graph if requested
     if args.graph:
-        metadata = {
-            'timestamp': args.timestamp,
-            'commit': args.commit,
-            'git_status': args.git_status,
-            'cpu': args.cpu,
-            'os': args.os,
-            'cpucount': args.cpucount,
-            'source': args.source
-        }
-        generate_graph(allocators, weighted_sums, metadata, args.graph, args.title_suffix)
+        generate_graph(allocators, weighted_sums, args, args.graph, args.title_suffix)
 
 if __name__ == "__main__":
     main()

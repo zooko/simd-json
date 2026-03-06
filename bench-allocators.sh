@@ -1,39 +1,12 @@
 #!/bin/bash
 set -e
 
+source "$(dirname "$0")/gather-metadata.sh"
+
 BNAME="simd-json"
-
-# Collect metadata
-TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
-GITSOURCE=$(git remote get-url origin)
-[[ "$GITSOURCE" == git@* ]] && GITSOURCE=$(echo "$GITSOURCE" | sed 's|^git@\([^:]*\):\(.*\)|https://\1/\2|')
-GITSOURCE="${GITSOURCE%.git}"
-
-GITCOMMIT=$(git rev-parse HEAD)
-GITCLEANSTATUS=$( [ -z "$( git status --porcelain )" ] && echo Clean || echo Uncommitted changes )
-
-# Detect CPU type
-if command -v lscpu >/dev/null 2>&1; then
-    # Linux, but John's little raspbi has better information in lscpu than in /proc/cpuinfo
-    CPUTYPE=$(lscpu 2>/dev/null | grep -i "model name" | cut -d':' -f2-)
-elif command -v sysctl >/dev/null 2>&1; then
-    # macOS
-    CPUTYPE=$(sysctl -n machdep.cpu.brand_string 2>/dev/null)
-elif [ -f /proc/cpuinfo ]; then
-    # Linux in case it didn't have lscpu, and also mingw64 on Windows provides /proc/cpuifo
-    CPUTYPE=$(grep -m1 "model name" /proc/cpuinfo | cut -d':' -f2-)
-fi
-CPUTYPE=${CPUTYPE:-Unknown}
-CPUTYPE=${CPUTYPE## }  # Trim leading space
-
-CPUTYPESTR="${CPUTYPE//[^[:alnum:]]/}"
-OSTYPESTR="${OSTYPE//[^[:alnum:]]/}"
-
-CPUCOUNT=$(nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || echo "${NUMBER_OF_PROCESSORS:-unknown}")
 
 ARGS=$*
 
-CPUSTR_DOT_OSSTR="${CPUTYPESTR}.${OSTYPESTR}"
 OUTPUT_DIR="${OUTPUT_DIR:-./benchmark-results}/${CPUSTR_DOT_OSSTR}"
 
 RESF="${OUTPUT_DIR}/${BNAME}.result.txt"
@@ -44,12 +17,8 @@ mkdir -p tmp
 rm -f $RESF $GRAPHF
 
 echo "TIMESTAMP: ${TIMESTAMP}" 2>&1 | tee -a $RESF
-echo "GITSOURCE: ${GITSOURCE}" 2>&1 | tee -a $RESF
-echo "GITCOMMIT: ${GITCOMMIT}" 2>&1 | tee -a $RESF
-echo "GITCLEANSTATUS: ${GITCLEANSTATUS}" 2>&1 | tee -a $RESF
-echo "CPUTYPE: ${CPUTYPE}" 2>&1 | tee -a $RESF
-echo "OSTYPE: ${OSTYPE}" 2>&1 | tee -a $RESF
-echo "CPUCOUNT: ${CPUCOUNT}" 2>&1 | tee -a $RESF
+gather_and_print_git_metadata 2>&1 | tee -a $RESF
+print_machine_metadata 2>&1 | tee -a $RESF
 
 mkdir -p ${OUTPUT_DIR}
 
@@ -70,15 +39,6 @@ for AL in ${ALLOCATORS} ; do
 done
 
 # Generate comparison with metadata passed as arguments
-./critcmp.py tmp/default $TMPALLOS \
-    --timestamp "$TIMESTAMP" \
-    --source "$GITSOURCE" \
-    --commit "$GITCOMMIT" \
-    --git-status "$GITCLEANSTATUS" \
-    --cpu "$CPUTYPE" \
-    --os "$OSTYPE" \
-    --cpucount "$CPUCOUNT" \
-    --graph "$GRAPHF" \
-    2>&1 | tee -a $RESF
+./critcmp.py tmp/default $TMPALLOS --graph $GRAPHF "${METADATA_ARGS_TO_PASS_TO_PYTHON_SCRIPT[@]}" 2>&1 | tee -a $RESF
 
 echo "# Results are in \"${RESF}\" ."
