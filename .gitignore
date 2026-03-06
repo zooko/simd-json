@@ -9,3 +9,4 @@ proptest-regressions
 rust-toolchain
 tmp
 benchmark-results
+__pycache__
