@@ -47,6 +47,7 @@ def add_parse_args(parser):
     parser.add_argument('--cpu', help='CPU type')
     parser.add_argument('--os', help='OS type')
     parser.add_argument('--cpu-count', help='Number of CPUs')
+    parser.add_argument('--smalloc-dep-version', help='Version number of smalloc dependency (from cargo metadata)')
 
 def escape_xml(text):
     """Escape special XML characters."""
@@ -77,6 +78,10 @@ def add_svg_metadata(args, metadata_y, svg_parts, svg_width):
     if args.cpu_count:
         line3_parts.append(f"CPU count: {args.cpu_count}")
 
+    line4_parts = []
+    if args.smalloc_dep_version:
+        line4_parts.append(f"smalloc dep v: {args.smalloc_dep_version}")
+
     if line0_parts:
         svg_parts.append(f'  <text x="{svg_width/2}" y="{metadata_y}" class="metadata" text-anchor="middle">{escape_xml(" · ".join(line0_parts))}</text>\n')
     if line1_parts:
@@ -85,3 +90,5 @@ def add_svg_metadata(args, metadata_y, svg_parts, svg_width):
         svg_parts.append(f'  <text x="{svg_width/2}" y="{metadata_y + 28}" class="metadata" text-anchor="middle">{" · ".join(line2_parts)}</text>\n')
     if line3_parts:
         svg_parts.append(f'  <text x="{svg_width/2}" y="{metadata_y + 42}" class="metadata" text-anchor="middle">{" · ".join(line3_parts)}</text>\n')
+    if line4_parts:
+        svg_parts.append(f'  <text x="{svg_width/2}" y="{metadata_y + 56}" class="metadata" text-anchor="middle">{" · ".join(line4_parts)}</text>\n')

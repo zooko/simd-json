@@ -1,13 +1,13 @@
 #!/bin/bash
 set -e
 
-source "$(dirname "$0")/gather-metadata.sh"
+source "$(dirname "$0")/tools.sh"
+
+parse_bench_args "$@"
+
+set -- "${POSITIONAL_ARGS[@]}"
 
 BNAME="simd-json"
-
-ARGS=$*
-
-OUTPUT_DIR="${OUTPUT_DIR:-./benchmark-results}/${CPUSTR_DOT_OSSTR}"
 
 RESF="${OUTPUT_DIR}/${BNAME}.result.txt"
 GRAPHF="${OUTPUT_DIR}/${BNAME}.graph.svg"
@@ -19,26 +19,30 @@ rm -f $RESF $GRAPHF
 echo "TIMESTAMP: ${TIMESTAMP}" 2>&1 | tee -a $RESF
 gather_and_print_git_metadata 2>&1 | tee -a $RESF
 print_machine_metadata 2>&1 | tee -a $RESF
-
-mkdir -p ${OUTPUT_DIR}
-
-if [ "x${OSTYPE}" = "xmsys" ]; then
-    # no jemalloc or snmalloc on windows
-    ALLOCATORS="mimalloc rpmalloc smalloc"
-else
-    ALLOCATORS="jemalloc snmalloc mimalloc rpmalloc smalloc"
-fi
-
-TMPALLOS="tmp/${ALLOCATORS// / tmp/}"
+gather_and_print_smalloc_dep_version 2>&1 | tee -a $RESF
 
 # Run benchmarks
-cargo --locked bench 2>&1 | tee tmp/default
-for AL in ${ALLOCATORS} ; do 
-    BLNAME=${AL}
-    cargo --locked bench --features=${AL} 2>&1 | tee tmp/${BLNAME}
+
+TMPALLOS=()
+
+# default allocator
+BLNAME="tmp/default"
+# cargo "${CARGO_CONFIG_ARGS[@]}" --frozen bench 2>&1 | tee $BLNAME
+TMPALLOS+=("${BLNAME}")
+
+# smalloc
+BLNAME="tmp/smalloc"
+cargo "${CARGO_CONFIG_ARGS[@]}" --frozen bench --features=smalloc 2>&1 | tee $BLNAME
+TMPALLOS+=("${BLNAME}")
+
+# the rest
+for AL in "${ALLOCATOR_LIST[@]}" ; do 
+    BLNAME="tmp/$AL"
+    cargo "${CARGO_CONFIG_ARGS[@]}" --frozen bench --features=${AL} 2>&1 | tee $BLNAME
+    TMPALLOS+=("${BLNAME}")
 done
 
 # Generate comparison with metadata passed as arguments
-./critcmp.py tmp/default $TMPALLOS --graph $GRAPHF "${METADATA_ARGS_TO_PASS_TO_PYTHON_SCRIPT[@]}" 2>&1 | tee -a $RESF
+./critcmp.py "${TMPALLOS[@]}" --graph $GRAPHF "${METADATA_ARGS_TO_PASS_TO_PYTHON_SCRIPT[@]}" 2>&1 | tee -a $RESF
 
 echo "# Results are in \"${RESF}\" ."

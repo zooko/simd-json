@@ -323,7 +323,7 @@ def generate_graph(allocators: list[str], weighted_sums: dict[str, float],
         if bar_height > 35:
             svg_parts.append(f'  <text x="{name_x}" y="{bar_y + 18}" class="bar-label-pct" text-anchor="middle">{metadata.escape_xml(pct_label)}</text>')
 
-    metadata.add_svg_metadata(metadata_dict, svg_height - 50, svg_parts, svg_width)
+    metadata.add_svg_metadata(metadata_dict, svg_height - 64, svg_parts, svg_width)
     
     svg_parts.append('</svg>')
 
