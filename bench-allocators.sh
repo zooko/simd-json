@@ -27,7 +27,7 @@ TMPALLOS=()
 
 # default allocator
 BLNAME="tmp/default"
-# cargo "${CARGO_CONFIG_ARGS[@]}" --frozen bench 2>&1 | tee $BLNAME
+cargo "${CARGO_CONFIG_ARGS[@]}" --frozen bench 2>&1 | tee $BLNAME
 TMPALLOS+=("${BLNAME}")
 
 # smalloc
