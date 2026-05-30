@@ -3,10 +3,6 @@ set -e
 
 source "$(dirname "$0")/tools.sh"
 
-parse_bench_args "$@"
-
-set -- "${POSITIONAL_ARGS[@]}"
-
 BNAME="simd-json"
 
 RESF="${OUTPUT_DIR}/${BNAME}.result.txt"
@@ -25,18 +21,19 @@ gather_and_print_smalloc_dep_version 2>&1 | tee -a $RESF
 
 TMPALLOS=()
 
-# default allocator
+echo benchmarking with default allocator…
 BLNAME="tmp/default"
 cargo "${CARGO_CONFIG_ARGS[@]}" --frozen bench 2>&1 | tee $BLNAME
 TMPALLOS+=("${BLNAME}")
 
-# smalloc
+echo benchmarking with smalloc…
 BLNAME="tmp/smalloc"
 cargo "${CARGO_CONFIG_ARGS[@]}" --frozen bench --features=smalloc 2>&1 | tee $BLNAME
 TMPALLOS+=("${BLNAME}")
 
 # the rest
-for AL in "${ALLOCATOR_LIST[@]}" ; do 
+for AL in "${ALLOCATOR_LIST[@]}" ; do
+    echo benchmarking with ${AL}…
     BLNAME="tmp/$AL"
     cargo "${CARGO_CONFIG_ARGS[@]}" --frozen bench --features=${AL} 2>&1 | tee $BLNAME
     TMPALLOS+=("${BLNAME}")
