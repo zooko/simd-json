@@ -5,6 +5,7 @@ source "$(dirname "$0")/tools.sh"
 
 BNAME="simd-json"
 
+# Output files
 RESF="${OUTPUT_DIR}/${BNAME}.result.txt"
 GRAPHF="${OUTPUT_DIR}/${BNAME}.graph.svg"
 
@@ -23,19 +24,19 @@ TMPALLOS=()
 
 echo benchmarking with default allocator…
 BLNAME="tmp/default"
-cargo --frozen bench 2>&1 | tee $BLNAME
+cargo --offline bench 2>&1 | tee $BLNAME
 TMPALLOS+=("${BLNAME}")
 
 echo benchmarking with smalloc…
 BLNAME="tmp/smalloc"
-cargo --frozen bench --features=smalloc 2>&1 | tee $BLNAME
+cargo --offline bench --features=smalloc 2>&1 | tee $BLNAME
 TMPALLOS+=("${BLNAME}")
 
 # the rest
 for AL in "${ALLOCATOR_LIST[@]}" ; do
     echo benchmarking with ${AL}…
     BLNAME="tmp/$AL"
-    cargo --frozen bench --features=${AL} 2>&1 | tee $BLNAME
+    cargo --offline bench --features=${AL} 2>&1 | tee $BLNAME
     TMPALLOS+=("${BLNAME}")
 done
 
