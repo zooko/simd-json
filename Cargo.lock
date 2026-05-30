@@ -1187,9 +1187,7 @@ checksum = "38b58827f4464d87d377d175e90bf58eb00fd8716ff0a62f80356b5e61555d0d"
 
 [[package]]
 name = "smmalloc"
-version = "7.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a45166f5922ec270fb3a362a8df0619c59e42ed66873ac531c7a05316bba6ed7"
+version = "7.6.7+ebe2f2d3ac2bbbe97eeed06c53a8e4b491e35e2d"
 dependencies = [
  "mach-sys",
  "rustix",

@@ -23,19 +23,19 @@ TMPALLOS=()
 
 echo benchmarking with default allocator…
 BLNAME="tmp/default"
-cargo "${CARGO_CONFIG_ARGS[@]}" --frozen bench 2>&1 | tee $BLNAME
+cargo --frozen bench 2>&1 | tee $BLNAME
 TMPALLOS+=("${BLNAME}")
 
 echo benchmarking with smalloc…
 BLNAME="tmp/smalloc"
-cargo "${CARGO_CONFIG_ARGS[@]}" --frozen bench --features=smalloc 2>&1 | tee $BLNAME
+cargo --frozen bench --features=smalloc 2>&1 | tee $BLNAME
 TMPALLOS+=("${BLNAME}")
 
 # the rest
 for AL in "${ALLOCATOR_LIST[@]}" ; do
     echo benchmarking with ${AL}…
     BLNAME="tmp/$AL"
-    cargo "${CARGO_CONFIG_ARGS[@]}" --frozen bench --features=${AL} 2>&1 | tee $BLNAME
+    cargo --frozen bench --features=${AL} 2>&1 | tee $BLNAME
     TMPALLOS+=("${BLNAME}")
 done
 
