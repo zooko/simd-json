@@ -41,6 +41,6 @@ cargo --offline bench --features=smalloc 2>&1 | tee $BLNAME
 TMPALLOS+=("${BLNAME}")
 
 # Generate comparison with metadata passed as arguments
-./critcmp.py "${TMPALLOS[@]}" --graph $GRAPHF "${METADATA_ARGS_TO_PASS_TO_PYTHON_SCRIPT[@]}" 2>&1 | tee -a $RESF
+./critcmp.py "${TMPALLOS[@]}" --graph $GRAPHF "${METADATA_ARGS_TO_PASS_TO_PYTHON_SCRIPT[@]}" --smalloc-dep-version $(get_smalloc_dep_version) 2>&1 | tee -a $RESF
 
 echo "# Results are in \"${RESF}\" ."

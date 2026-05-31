@@ -117,7 +117,7 @@ def print_results(allocators: list[str], all_results: dict[str, dict[str, float]
         print("No data to display.")
         return {}
 
-    baseline_alloc = allocators[0]
+    baseline_alloc = allocators[-1]
 
     # Find the longest test name for formatting
     max_test_len = max(len(t) for t in sorted_tests)
@@ -234,7 +234,7 @@ def generate_graph(allocators: list[str], weighted_sums: dict[str, float],
                    metadata_dict: dict, output_file: str, title_suffix: str = ''):
     """Generate SVG bar chart comparing allocator performance."""
 
-    baseline = weighted_sums.get(allocators[0], 0)
+    baseline = weighted_sums.get(allocators[-1], 0)
 
     if baseline == 0:
         print("Warning: Baseline has no data, skipping graph generation.")
@@ -319,7 +319,7 @@ def generate_graph(allocators: list[str], weighted_sums: dict[str, float],
         time_label = format_time(weighted_sums.get(allocator, 0))
         svg_parts.append(f'  <text x="{name_x}" y="{bar_y - 8}" class="bar-label-value" text-anchor="middle">{metadata.escape_xml(time_label)}</text>')
 
-        pct_label = "baseline" if allocator == allocators[0] else format_pct_diff(pct / 100.0)
+        pct_label = "baseline" if allocator == allocators[-1] else format_pct_diff(pct / 100.0)
         if bar_height > 35:
             svg_parts.append(f'  <text x="{name_x}" y="{bar_y + 18}" class="bar-label-pct" text-anchor="middle">{metadata.escape_xml(pct_label)}</text>')
 
@@ -345,11 +345,18 @@ def main():
     all_results: dict[str, dict[str, float]] = {}
     allocators: list[str] = []
 
+    # Extract allocator name from filename (e.g., "tmp/default" -> "default")
     for filepath in args.files:
-        # Extract allocator name from filename (e.g., "tmp/default" -> "default")
-        allocator_name = filepath.rsplit('/', 1)[-1].replace('.txt', '').replace('.bench', '')
-        allocators.append(allocator_name)
-        all_results[allocator_name] = parse_file(filepath)
+        base = os.path.basename(filepath)
+        for suffix in ('.txt', '.bench'):
+            if base.endswith(suffix):
+                base = base[: -len(suffix)]
+                break
+        assert base not in all_results, f"duplicate allocator name: {base!r} from {filepath}"
+        allocators.append(base)
+        all_results[base] = parse_file(filepath)
+
+    allocators = metadata.sort_allocators(allocators)
 
     # Get all unique test names
     all_tests: set[str] = set()
