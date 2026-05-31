@@ -27,11 +27,6 @@ BLNAME="tmp/default"
 cargo --offline bench 2>&1 | tee $BLNAME
 TMPALLOS+=("${BLNAME}")
 
-echo benchmarking with smalloc…
-BLNAME="tmp/smalloc"
-cargo --offline bench --features=smalloc 2>&1 | tee $BLNAME
-TMPALLOS+=("${BLNAME}")
-
 # the rest
 for AL in "${ALLOCATOR_LIST[@]}" ; do
     echo benchmarking with ${AL}…
@@ -39,6 +34,11 @@ for AL in "${ALLOCATOR_LIST[@]}" ; do
     cargo --offline bench --features=${AL} 2>&1 | tee $BLNAME
     TMPALLOS+=("${BLNAME}")
 done
+
+echo benchmarking with smalloc…
+BLNAME="tmp/smalloc"
+cargo --offline bench --features=smalloc 2>&1 | tee $BLNAME
+TMPALLOS+=("${BLNAME}")
 
 # Generate comparison with metadata passed as arguments
 ./critcmp.py "${TMPALLOS[@]}" --graph $GRAPHF "${METADATA_ARGS_TO_PASS_TO_PYTHON_SCRIPT[@]}" 2>&1 | tee -a $RESF
