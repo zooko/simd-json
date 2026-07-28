@@ -16,7 +16,7 @@ rm -f $RESF $GRAPHF
 echo "TIMESTAMP: ${TIMESTAMP}" 2>&1 | tee -a $RESF
 gather_and_print_git_metadata 2>&1 | tee -a $RESF
 print_machine_metadata 2>&1 | tee -a $RESF
-gather_and_print_smalloc_dep_version 2>&1 | tee -a $RESF
+get_smalloc_dep_version . 2>&1 | tee -a $RESF
 
 # Run benchmarks
 
@@ -41,6 +41,6 @@ cargo --offline bench --features=smalloc 2>&1 | tee $BLNAME
 TMPALLOS+=("${BLNAME}")
 
 # Generate comparison with metadata passed as arguments
-./critcmp.py "${TMPALLOS[@]}" --graph $GRAPHF "${METADATA_ARGS_TO_PASS_TO_PYTHON_SCRIPT[@]}" --smalloc-dep-version $(get_smalloc_dep_version) 2>&1 | tee -a $RESF
+./critcmp.py "${TMPALLOS[@]}" --graph $GRAPHF "${METADATA_ARGS_TO_PASS_TO_PYTHON_SCRIPT[@]}" --smalloc-dep-version $(get_smalloc_dep_version .) 2>&1 | tee -a $RESF
 
 echo "# Results are in \"${RESF}\" ."

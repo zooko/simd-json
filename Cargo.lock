@@ -1187,7 +1187,7 @@ checksum = "38b58827f4464d87d377d175e90bf58eb00fd8716ff0a62f80356b5e61555d0d"
 
 [[package]]
 name = "smmalloc"
-version = "7.6.7+ebe2f2d3ac2bbbe97eeed06c53a8e4b491e35e2d"
+version = "7.6.10+c55d2f585a638d795a1d2927baa982712eed93ab"
 dependencies = [
  "mach-sys",
  "rustix",
