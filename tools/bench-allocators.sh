@@ -28,20 +28,20 @@ TMPALLOS=()
 
 echo benchmarking with default allocator…
 BLNAME="tmp/default"
-cargo --offline bench 2>&1 | tee $BLNAME
+cargo --locked --offline bench 2>&1 | tee $BLNAME
 TMPALLOS+=("${BLNAME}")
 
 # the rest
 for AL in "${ALLOCATOR_LIST[@]}" ; do
     echo benchmarking with ${AL}…
     BLNAME="tmp/$AL"
-    cargo --offline bench --features=${AL} 2>&1 | tee $BLNAME
+    cargo --locked --offline bench --features=${AL} 2>&1 | tee $BLNAME
     TMPALLOS+=("${BLNAME}")
 done
 
 echo benchmarking with smalloc…
 BLNAME="tmp/smalloc"
-cargo --offline bench --features=smalloc 2>&1 | tee $BLNAME
+cargo --locked --offline bench --features=smalloc 2>&1 | tee $BLNAME
 TMPALLOS+=("${BLNAME}")
 
 # Generate comparison with metadata passed as arguments
