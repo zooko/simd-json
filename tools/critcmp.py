@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env pypy3
 """
 Compare criterion benchmark results across multiple allocators.
 """

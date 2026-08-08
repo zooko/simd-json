@@ -1,7 +1,11 @@
 #!/bin/bash
 set -e
 
-source "$(dirname "$0")/tools.sh"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+
+cd "$REPO_ROOT"
+source "$SCRIPT_DIR/tools.sh"
 
 BNAME="simd-json"
 
@@ -16,7 +20,7 @@ rm -f $RESF $GRAPHF
 echo "TIMESTAMP: ${TIMESTAMP}" 2>&1 | tee -a $RESF
 gather_and_print_git_metadata 2>&1 | tee -a $RESF
 print_machine_metadata 2>&1 | tee -a $RESF
-get_smalloc_dep_version . 2>&1 | tee -a $RESF
+echo "smalloc version: $(get_smalloc_dep_version .)" 2>&1 | tee -a $RESF
 
 # Run benchmarks
 
@@ -41,6 +45,6 @@ cargo --offline bench --features=smalloc 2>&1 | tee $BLNAME
 TMPALLOS+=("${BLNAME}")
 
 # Generate comparison with metadata passed as arguments
-./critcmp.py "${TMPALLOS[@]}" --graph $GRAPHF "${METADATA_ARGS_TO_PASS_TO_PYTHON_SCRIPT[@]}" --smalloc-dep-version $(get_smalloc_dep_version .) 2>&1 | tee -a $RESF
+./tools/critcmp.py "${TMPALLOS[@]}" --graph $GRAPHF "${METADATA_ARGS_TO_PASS_TO_PYTHON_SCRIPT[@]}" --smalloc-dep-version $(get_smalloc_dep_version .) 2>&1 | tee -a $RESF
 
 echo "# Results are in \"${RESF}\" ."
